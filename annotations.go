@@ -389,7 +389,7 @@ func parseFailureAnnotation(line string) (*ErrorResponse, error) {
 	// @Failure 400 {object} Type "Description"
 	content := strings.TrimPrefix(line, "@Failure ")
 	parts := strings.Fields(content)
-	if len(parts) < 2 {
+	if len(parts) < 3 {
 		return nil, fmt.Errorf("invalid @Failure annotation: %s", line)
 	}
 
@@ -398,12 +398,18 @@ func parseFailureAnnotation(line string) (*ErrorResponse, error) {
 		return nil, err
 	}
 
-	failure := &ErrorResponse{StatusCode: statusCode}
+	dataType := parts[2]
 
+	failure := &ErrorResponse{
+		StatusCode: statusCode,
+		Type:       dataType,
+	}
+
+	remaining := strings.Join(parts[3:], " ")
 	// Extract description
-	if start := strings.Index(content, "\""); start != -1 {
-		if end := strings.LastIndex(content, "\""); end != -1 && end > start {
-			failure.Description = content[start+1 : end]
+	if start := strings.Index(remaining, "\""); start != -1 {
+		if end := strings.LastIndex(remaining, "\""); end != -1 && end > start {
+			failure.Description = remaining[start+1 : end]
 		}
 	}
 

@@ -20,7 +20,7 @@ import (
 // @Param id path int true "ID param"
 // @Param q query string false "Query param"
 // @Success 200 {object} TestResponse "Success desc"
-// @Failure 400 {object} ProblemDetails "Bad request"
+// @Failure 400 {object} TestErrorResponse "Bad request"
 func HandlerWithAnnotations() {}
 
 func TestParseAnnotations_AllAnnotations(t *testing.T) {
@@ -56,8 +56,19 @@ func TestParseAnnotations_AllAnnotations(t *testing.T) {
 	if annotation.Success == nil || annotation.Success.DataType != "TestResponse" {
 		t.Errorf("expected success DataType 'TestResponse', got %+v", annotation.Success)
 	}
-	if len(annotation.Failures) != 1 || annotation.Failures[0].StatusCode != 400 {
-		t.Errorf("expected failure 400, got %+v", annotation.Failures)
+
+	if l := len(annotation.Failures); l != 1 {
+		t.Fatalf("expected one failure got %d", l)
+	}
+
+	expectedFailure := openapi.ErrorResponse{
+		StatusCode:  400,
+		Type:        "TestErrorResponse",
+		Description: "Bad request",
+	}
+
+	if got := annotation.Failures[0]; got != expectedFailure {
+		t.Errorf("expected failure %+v, got %+v", expectedFailure, got)
 	}
 }
 
