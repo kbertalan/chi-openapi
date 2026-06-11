@@ -1,4 +1,4 @@
-package annot8
+package openapi
 
 // AddWebhook attaches a webhook path item to the specification.
 func (g *Generator) AddWebhook(spec *Spec, name string, pathItem PathItem) {

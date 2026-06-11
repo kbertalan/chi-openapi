@@ -1,6 +1,6 @@
-package annot8
+package openapi
 
-// TestSimple is a helper struct used by annot8 tests to verify schema generation.
+// TestSimple is a helper struct used by openapi tests to verify schema generation.
 type TestSimple struct {
 	ID   int    `json:"id"`
 	Name string `json:"name"`
@@ -33,8 +33,8 @@ type TestWithQualified struct {
 
 // TagExample exercises enhanced tag handling when generating schemas.
 type TagExample struct {
-	ID    string `json:"id"              annot8:"format=uuid,deprecated=true,default=00000000-0000-0000-0000-000000000000"`
-	Alias string `json:"alias,omitempty" annot8:"pattern=^a.*$,minLength=2,maxLength=5"`
+	ID    string `json:"id"              openapi:"format=uuid,deprecated=true,default=00000000-0000-0000-0000-000000000000"`
+	Alias string `json:"alias,omitempty" openapi:"pattern=^a.*$,minLength=2,maxLength=5"`
 	Email string `json:"email"                                                                                              validate:"email"`
 	Owner string `json:"owner,omitempty"                                                                                                     binding:"uuid"`
 }
@@ -56,8 +56,8 @@ type TestWithEnumField struct {
 
 // TestCompliance31 verifies OpenAPI 3.1 specific schema features.
 type TestCompliance31 struct {
-	Count int     `json:"count" annot8:"exclusiveMin=0,exclusiveMax=100"`
-	Rate  float64 `json:"rate"  annot8:"exclusiveMin=0.5"`
+	Count int     `json:"count" openapi:"exclusiveMin=0,exclusiveMax=100"`
+	Rate  float64 `json:"rate"  openapi:"exclusiveMin=0.5"`
 }
 
 // TestAliasMap is a type alias for a map.

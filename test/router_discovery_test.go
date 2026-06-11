@@ -1,4 +1,4 @@
-package annot8_test
+package openapi_test
 
 import (
 	"errors"
@@ -7,7 +7,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/AxelTahmid/annot8"
+	openapi "github.com/kbertalan/chi-openapi"
 )
 
 func TestInspectRoutes(t *testing.T) {
@@ -15,7 +15,7 @@ func TestInspectRoutes(t *testing.T) {
 	r.Get("/foo", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	r.Post("/bar/{id}", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 
-	routes, err := annot8.InspectRoutes(r)
+	routes, err := openapi.InspectRoutes(r)
 	if err != nil {
 		t.Fatalf("InspectRoutes returned error: %v", err)
 	}
@@ -39,9 +39,9 @@ func TestInspectRoutes(t *testing.T) {
 func TestDiscoverRoutes(t *testing.T) {
 	r := chi.NewRouter()
 	r.Get("/foo", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
-	r.Get("/annot8.json", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	r.Get("/openapi.json", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 
-	routes, err := annot8.DiscoverRoutes(r)
+	routes, err := openapi.DiscoverRoutes(r)
 	if err != nil {
 		t.Fatalf("DiscoverRoutes returned error: %v", err)
 	}
@@ -55,11 +55,11 @@ func TestDiscoverRoutes(t *testing.T) {
 
 // TestInspectRoutes_NilRouter verifies InspectRoutes returns a RouteDiscoveryError when router is nil.
 func TestInspectRoutes_NilRouter(t *testing.T) {
-	routes, err := annot8.InspectRoutes(nil)
+	routes, err := openapi.InspectRoutes(nil)
 	if routes != nil {
 		t.Errorf("Expected nil routes for nil router, got %v", routes)
 	}
-	var rdErr *annot8.RouteDiscoveryError
+	var rdErr *openapi.RouteDiscoveryError
 	if !errors.As(err, &rdErr) {
 		t.Fatalf("Expected RouteDiscoveryError, got %T", err)
 	}
@@ -68,14 +68,14 @@ func TestInspectRoutes_NilRouter(t *testing.T) {
 	}
 }
 
-// TestDiscoverRoutes_FiltersInternal ensures DiscoverRoutes filters swagger and annot8 paths.
+// TestDiscoverRoutes_FiltersInternal ensures DiscoverRoutes filters swagger and openapi paths.
 func TestDiscoverRoutes_FiltersInternal(t *testing.T) {
 	r := chi.NewRouter()
 	stub := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
 	r.Get("/swagger/doc", stub)
-	r.Get("/annot8/data", stub)
+	r.Get("/openapi/data", stub)
 	r.Get("/public", stub)
-	routes, err := annot8.DiscoverRoutes(r)
+	routes, err := openapi.DiscoverRoutes(r)
 	if err != nil {
 		t.Fatalf("DiscoverRoutes returned error: %v", err)
 	}
@@ -91,7 +91,7 @@ func TestInspectRoutes_Middleware(t *testing.T) {
 	r.Use(mw)
 	stub := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
 	r.Get("/path", stub)
-	routes, err := annot8.InspectRoutes(r)
+	routes, err := openapi.InspectRoutes(r)
 	if err != nil {
 		t.Fatalf("InspectRoutes returned error: %v", err)
 	}
@@ -125,7 +125,7 @@ func TestDiscoverRoutes_HandlerMapping(t *testing.T) {
 	r.Get("/api/v1/menu/", menuHandler)
 	r.Get("/api/v1/coupon/", couponHandler)
 
-	routes, err := annot8.DiscoverRoutes(r)
+	routes, err := openapi.DiscoverRoutes(r)
 	if err != nil {
 		t.Fatalf("DiscoverRoutes returned error: %v", err)
 	}

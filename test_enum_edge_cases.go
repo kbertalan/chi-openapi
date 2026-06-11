@@ -1,5 +1,5 @@
 // Test file to check enum extraction edge cases
-package annot8
+package openapi
 
 // EnumWithImplicitType tests const with implicit type from predecessor
 type StatusEnum string

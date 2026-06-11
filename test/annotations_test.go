@@ -1,4 +1,4 @@
-package annot8_test
+package openapi_test
 
 import (
 	"os"
@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/AxelTahmid/annot8"
+	openapi "github.com/kbertalan/chi-openapi"
 )
 
 // --- Test Handlers for annotation parsing ---
@@ -24,7 +24,7 @@ import (
 func HandlerWithAnnotations() {}
 
 func TestParseAnnotations_AllAnnotations(t *testing.T) {
-	annotation, err := annot8.ParseAnnotations("annotations_test.go", "HandlerWithAnnotations")
+	annotation, err := openapi.ParseAnnotations("annotations_test.go", "HandlerWithAnnotations")
 	if err != nil {
 		t.Fatalf("ParseAnnotations error: %v", err)
 	}
@@ -62,7 +62,7 @@ func TestParseAnnotations_AllAnnotations(t *testing.T) {
 }
 
 func TestParseAnnotations_Empty(t *testing.T) {
-	annotation, err := annot8.ParseAnnotations("annotations_test.go", "NonExistentHandler")
+	annotation, err := openapi.ParseAnnotations("annotations_test.go", "NonExistentHandler")
 	if err != nil {
 		t.Fatalf("ParseAnnotations error: %v", err)
 	}
@@ -88,7 +88,7 @@ func CouponList() {}
 // with the same function name "List" get their correct annotations
 func TestParseAnnotations_MenuCouponDistinct(t *testing.T) {
 	// Test menu handler annotations
-	menuAnnotation, err := annot8.ParseAnnotations("annotations_test.go", "MenuList")
+	menuAnnotation, err := openapi.ParseAnnotations("annotations_test.go", "MenuList")
 	if err != nil {
 		t.Fatalf("ParseAnnotations for MenuList error: %v", err)
 	}
@@ -100,7 +100,7 @@ func TestParseAnnotations_MenuCouponDistinct(t *testing.T) {
 	}
 
 	// Test coupon handler annotations
-	couponAnnotation, err := annot8.ParseAnnotations("annotations_test.go", "CouponList")
+	couponAnnotation, err := openapi.ParseAnnotations("annotations_test.go", "CouponList")
 	if err != nil {
 		t.Fatalf("ParseAnnotations for CouponList error: %v", err)
 	}
@@ -117,7 +117,7 @@ func TestParseAnnotations_MenuCouponDistinct(t *testing.T) {
 	}
 
 	// Test that calling them multiple times gives consistent results
-	menuAnnotation2, err := annot8.ParseAnnotations("annotations_test.go", "MenuList")
+	menuAnnotation2, err := openapi.ParseAnnotations("annotations_test.go", "MenuList")
 	if err != nil {
 		t.Fatalf("Second ParseAnnotations for MenuList error: %v", err)
 	}
@@ -125,7 +125,7 @@ func TestParseAnnotations_MenuCouponDistinct(t *testing.T) {
 		t.Errorf("Second call: Menu handler summary changed to %q", menuAnnotation2.Summary)
 	}
 
-	couponAnnotation2, err := annot8.ParseAnnotations("annotations_test.go", "CouponList")
+	couponAnnotation2, err := openapi.ParseAnnotations("annotations_test.go", "CouponList")
 	if err != nil {
 		t.Fatalf("Second ParseAnnotations for CouponList error: %v", err)
 	}
@@ -149,7 +149,7 @@ func Handler() {}
 	}
 	windowsPath := strings.ReplaceAll(filePath, string(filepath.Separator), "\\")
 
-	annotation, err := annot8.ParseAnnotations(windowsPath, "Handler")
+	annotation, err := openapi.ParseAnnotations(windowsPath, "Handler")
 	if err != nil {
 		t.Fatalf("ParseAnnotations with Windows path error: %v", err)
 	}

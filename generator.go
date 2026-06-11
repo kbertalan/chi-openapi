@@ -1,4 +1,4 @@
-package annot8
+package openapi
 
 import (
 	"fmt"
@@ -63,10 +63,10 @@ func (g *Generator) GenerateSchema(typeName string) *Schema {
 // GenerateSpec assembles an OpenAPI specification for the supplied router.
 func (g *Generator) GenerateSpec(router chi.Router, cfg Config) Spec {
 	if cfg.Title == "" || cfg.Version == "" {
-		slog.Warn("[annot8] GenerateSpec: missing required config", "title", cfg.Title, "version", cfg.Version)
+		slog.Warn("[openapi] GenerateSpec: missing required config", "title", cfg.Title, "version", cfg.Version)
 	}
 
-	slog.Debug("[annot8] GenerateSpec: called", "title", cfg.Title, "version", cfg.Version)
+	slog.Debug("[openapi] GenerateSpec: called", "title", cfg.Title, "version", cfg.Version)
 
 	spec := Spec{
 		OpenAPI:           "3.1.0",
@@ -96,7 +96,7 @@ func (g *Generator) GenerateSpec(router chi.Router, cfg Config) Spec {
 	}
 
 	if len(cfg.Servers) > 0 {
-		slog.Debug("[annot8] GenerateSpec: adding servers", "count", len(cfg.Servers))
+		slog.Debug("[openapi] GenerateSpec: adding servers", "count", len(cfg.Servers))
 		spec.Servers = make([]Server, len(cfg.Servers))
 		for i, s := range cfg.Servers {
 			spec.Servers[i] = Server{URL: s, Description: "API Server"}
@@ -115,7 +115,7 @@ func (g *Generator) GenerateSpec(router chi.Router, cfg Config) Spec {
 	tags := make(map[string]bool)
 	routes, err := DiscoverRoutes(router)
 	if err != nil {
-		slog.Warn("[annot8] GenerateSpec: InspectRoutes error", "error", err)
+		slog.Warn("[openapi] GenerateSpec: InspectRoutes error", "error", err)
 	}
 
 	for _, ri := range routes {
@@ -157,7 +157,7 @@ func (g *Generator) GenerateSpec(router chi.Router, cfg Config) Spec {
 	// Post-process schemas to apply the naming strategy and resolve conflicts
 	g.finalizeSchemas(&spec)
 
-	slog.Debug("[annot8] GenerateSpec: completed", "path_count", len(spec.Paths))
+	slog.Debug("[openapi] GenerateSpec: completed", "path_count", len(spec.Paths))
 	return spec
 }
 

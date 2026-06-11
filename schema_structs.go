@@ -1,4 +1,4 @@
-package annot8
+package openapi
 
 import (
 	"go/ast"
@@ -8,7 +8,7 @@ import (
 
 // convertStructToSchema converts a Go AST struct type into an OpenAPI object schema.
 func (sg *SchemaGenerator) convertStructToSchema(structType *ast.StructType) *Schema {
-	slog.Debug("[annot8] convertStructToSchema: called")
+	slog.Debug("[openapi] convertStructToSchema: called")
 
 	var allOf []*Schema
 	properties := make(map[string]*Schema)
@@ -100,7 +100,7 @@ func (sg *SchemaGenerator) convertStructToSchema(structType *ast.StructType) *Sc
 // convertFieldType inspects a Go AST expression and returns its OpenAPI schema representation.
 // It handles identifiers, pointers, arrays, selectors, maps, and empty interfaces.
 func (sg *SchemaGenerator) convertFieldType(expr ast.Expr) *Schema {
-	slog.Debug("[annot8] convertFieldType: called")
+	slog.Debug("[openapi] convertFieldType: called")
 
 	switch t := expr.(type) {
 	case *ast.Ident:
@@ -175,7 +175,7 @@ func (sg *SchemaGenerator) convertFieldType(expr ast.Expr) *Schema {
 		return &Schema{Type: "object"}
 	}
 
-	slog.Debug("[annot8] convertFieldType: unknown type, defaulting to object")
+	slog.Debug("[openapi] convertFieldType: unknown type, defaulting to object")
 	return &Schema{Type: "object"}
 }
 

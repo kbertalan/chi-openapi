@@ -1,24 +1,24 @@
-package annot8_test
+package openapi_test
 
 import (
 	"strings"
 	"testing"
 
-	"github.com/AxelTahmid/annot8"
+	openapi "github.com/kbertalan/chi-openapi"
 )
 
 // TestQualifiedNaming_Internal tests internal types get qualified names
 func TestQualifiedNaming_Internal(t *testing.T) {
 	gen := NewTestSchemaGenerator()
 
-	// Use an existing type from the annot8 package
+	// Use an existing type from the openapi package
 	schema := gen.GenerateSchema("Schema")
 	if schema == nil || schema.Ref == "" {
 		t.Fatal("expected schema reference for Schema")
 	}
 
 	// The reference should use qualified name
-	expectedRef := "#/components/schemas/annot8.Schema"
+	expectedRef := "#/components/schemas/openapi.Schema"
 	if schema.Ref != expectedRef {
 		t.Errorf("expected ref %s, got %s", expectedRef, schema.Ref)
 	}
@@ -26,7 +26,7 @@ func TestQualifiedNaming_Internal(t *testing.T) {
 	// Check that the schema is stored under the qualified name
 	schemas := gen.GetSchemas()
 	if !HasSchemaWithSuffix(schemas, ".Schema") {
-		t.Error("schema should be stored under qualified name 'annot8.Schema'")
+		t.Error("schema should be stored under qualified name 'openapi.Schema'")
 	}
 }
 
@@ -52,7 +52,7 @@ func TestQualifiedNaming_NoDuplicates(t *testing.T) {
 	// Generate schema for same type multiple times using existing type
 	schema1 := gen.GenerateSchema("Schema")
 	schema2 := gen.GenerateSchema("Schema")
-	schema3 := gen.GenerateSchema("annot8.Schema") // explicit qualified name
+	schema3 := gen.GenerateSchema("openapi.Schema") // explicit qualified name
 
 	// All should return the same reference
 	if schema1.Ref != schema2.Ref || schema2.Ref != schema3.Ref {
@@ -91,10 +91,10 @@ func TestQualifiedNaming_Nested(t *testing.T) {
 
 // TestTypeIndexQualifiedLookup tests the new TypeIndex qualified lookup methods
 func TestTypeIndexQualifiedLookup(t *testing.T) {
-	idx := annot8.BuildTypeIndex()
+	idx := openapi.BuildTypeIndex()
 
 	t.Run("LookupQualifiedType works", func(t *testing.T) {
-		ts := idx.LookupQualifiedType("annot8.Schema")
+		ts := idx.LookupQualifiedType("openapi.Schema")
 		if ts == nil {
 			t.Error("should find Schema type by qualified name")
 		}
@@ -102,8 +102,8 @@ func TestTypeIndexQualifiedLookup(t *testing.T) {
 
 	t.Run("GetQualifiedTypeName works", func(t *testing.T) {
 		qualifiedName := idx.GetQualifiedTypeName("Schema")
-		if qualifiedName != "annot8.Schema" {
-			t.Errorf("expected 'annot8.Schema', got '%s'", qualifiedName)
+		if qualifiedName != "openapi.Schema" {
+			t.Errorf("expected 'openapi.Schema', got '%s'", qualifiedName)
 		}
 
 		// Already qualified name should be returned as-is

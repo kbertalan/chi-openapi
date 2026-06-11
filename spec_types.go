@@ -1,4 +1,4 @@
-package annot8
+package openapi
 
 // Config defines the configuration for OpenAPI specification generation.
 // All fields except Title and Version are optional.

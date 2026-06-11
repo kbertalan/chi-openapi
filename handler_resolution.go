@@ -1,4 +1,4 @@
-package annot8
+package openapi
 
 import (
 	"go/ast"
@@ -34,7 +34,7 @@ type HandlerInfo struct {
 
 // extractHandlerInfo resolves an http.Handler to source-level information.
 func (g *Generator) extractHandlerInfo(handler http.Handler, route string) *HandlerInfo {
-	slog.Debug("[annot8] extractHandlerInfo: called")
+	slog.Debug("[openapi] extractHandlerInfo: called")
 
 	handlerValue := reflect.ValueOf(handler)
 	if handlerValue.Kind() != reflect.Func {
@@ -57,7 +57,7 @@ func (g *Generator) extractHandlerInfo(handler http.Handler, route string) *Hand
 	name := resolveRuntimeName(rawName)
 
 	slog.Debug(
-		"[annot8] extractHandlerInfo: runtime info",
+		"[openapi] extractHandlerInfo: runtime info",
 		"file", file,
 		"rawName", rawName,
 		"name", name,
@@ -87,12 +87,12 @@ func (g *Generator) extractHandlerInfo(handler http.Handler, route string) *Hand
 
 resolved:
 	unique := buildUniqueFunctionName(file, name)
-	slog.Debug("[annot8] extractHandlerInfo: resolved", "file", file, "unique", unique)
+	slog.Debug("[openapi] extractHandlerInfo: resolved", "file", file, "unique", unique)
 
 	if file != "" {
 		if alt := preferRouteSegmentCandidate(typeIndex, route, file, name); alt != "" {
 			slog.Debug(
-				"[annot8] extractHandlerInfo: preferRouteSegmentCandidate switched file",
+				"[openapi] extractHandlerInfo: preferRouteSegmentCandidate switched file",
 				"from", file,
 				"to", alt,
 				"route", route,

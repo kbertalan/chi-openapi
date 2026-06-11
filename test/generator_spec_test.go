@@ -1,4 +1,4 @@
-package annot8_test
+package openapi_test
 
 import (
 	"net/http"
@@ -7,15 +7,15 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	annot8 "github.com/AxelTahmid/annot8"
+	openapi "github.com/kbertalan/chi-openapi"
 )
 
 // TestGenerateSpecRoutes ensures that GenerateSpec includes discovered routes and parameters.
 func TestGenerateSpecRoutes(t *testing.T) {
 	r := chi.NewRouter()
 	r.Get("/foo/{id}", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
-	cfg := annot8.Config{Title: "Test Service", Version: "1.2.3"}
-	g := annot8.NewGenerator()
+	cfg := openapi.Config{Title: "Test Service", Version: "1.2.3"}
+	g := openapi.NewGenerator()
 	spec := g.GenerateSpec(r, cfg)
 
 	// Check Info
@@ -49,17 +49,17 @@ func TestGenerateSpecRoutes(t *testing.T) {
 
 func TestGenerateSpec_Compliance31(t *testing.T) {
 	r := chi.NewRouter()
-	cfg := annot8.Config{
+	cfg := openapi.Config{
 		Title:       "Compliance Test",
 		Summary:     "Test Summary",
 		Version:     "3.1.0",
 		Description: "Testing 3.1 features",
-		License: &annot8.License{
+		License: &openapi.License{
 			Name:       "Apache 2.0",
 			Identifier: "Apache-2.0",
 		},
 	}
-	g := annot8.NewGenerator()
+	g := openapi.NewGenerator()
 	spec := g.GenerateSpec(r, cfg)
 
 	if spec.OpenAPI != "3.1.0" {
@@ -94,8 +94,8 @@ func TestGenerateSpecRoutes_MethodReceiver(t *testing.T) {
 	// register method value as handler
 	r.Post("/invoices/{id}", http.HandlerFunc(h.create))
 
-	cfg := annot8.Config{Title: "Test Service", Version: "1.2.3"}
-	g := annot8.NewGenerator()
+	cfg := openapi.Config{Title: "Test Service", Version: "1.2.3"}
+	g := openapi.NewGenerator()
 	spec := g.GenerateSpec(r, cfg)
 
 	// ensure path exists
@@ -143,8 +143,8 @@ func TestGenerateSpec_MenuCouponCollision(t *testing.T) {
 	r.Get("/api/v1/menu/", menuHandler)
 	r.Get("/api/v1/coupon/", couponHandler)
 
-	cfg := annot8.Config{Title: "Test API", Version: "1.0.0"}
-	g := annot8.NewGenerator()
+	cfg := openapi.Config{Title: "Test API", Version: "1.0.0"}
+	g := openapi.NewGenerator()
 	spec := g.GenerateSpec(r, cfg)
 
 	// Check that both paths exist
@@ -208,16 +208,16 @@ func TestGenerateSpec_ModelRenaming(t *testing.T) {
 	r := chi.NewRouter()
 
 	// Register some "external" types to test renaming without needing real source files
-	annot8.AddExternalKnownType("annot8_test.RenameTarget", &annot8.Schema{
+	openapi.AddExternalKnownType("openapi_test.RenameTarget", &openapi.Schema{
 		Type: "object",
-		Properties: map[string]*annot8.Schema{
+		Properties: map[string]*openapi.Schema{
 			"id": {Type: "string"},
 		},
 	})
-	annot8.AddExternalKnownType("annot8_test.NestedTarget", &annot8.Schema{
+	openapi.AddExternalKnownType("openapi_test.NestedTarget", &openapi.Schema{
 		Type: "object",
-		Properties: map[string]*annot8.Schema{
-			"child": {Ref: "#/components/schemas/annot8_test.RenameTarget"},
+		Properties: map[string]*openapi.Schema{
+			"child": {Ref: "#/components/schemas/openapi_test.RenameTarget"},
 		},
 	})
 
@@ -229,17 +229,17 @@ func TestGenerateSpec_ModelRenaming(t *testing.T) {
 		return name
 	}
 
-	cfg := annot8.Config{Title: "Renaming Test", Version: "1.0.0"}
-	g := annot8.NewGenerator()
+	cfg := openapi.Config{Title: "Renaming Test", Version: "1.0.0"}
+	g := openapi.NewGenerator()
 	g.SetModelNameFunc(customStrategy)
 
 	// Trigger generation of these schemas
-	g.GenerateSchema("annot8_test.RenameTarget")
-	g.GenerateSchema("annot8_test.NestedTarget")
+	g.GenerateSchema("openapi_test.RenameTarget")
+	g.GenerateSchema("openapi_test.NestedTarget")
 
 	spec := g.GenerateSpec(r, cfg)
 
-	// annot8_test.RenameTarget should be renamed to Target (pkg=annot8_test, name=RenameTarget)
+	// openapi_test.RenameTarget should be renamed to Target (pkg=openapi_test, name=RenameTarget)
 	if _, ok := spec.Components.Schemas["Target"]; !ok {
 		keys := make([]string, 0, len(spec.Components.Schemas))
 		for k := range spec.Components.Schemas {
@@ -268,8 +268,8 @@ func TestGenerateSpec_ModelRenaming(t *testing.T) {
 }
 
 func TestGenerateSpec_ConflictResolution(t *testing.T) {
-	cfg := annot8.Config{Title: "Conflict Test", Version: "1.0.0"}
-	g := annot8.NewGenerator()
+	cfg := openapi.Config{Title: "Conflict Test", Version: "1.0.0"}
+	g := openapi.NewGenerator()
 
 	// Strategy that forces everything to the same name
 	g.SetModelNameFunc(func(pkg, name string) string {

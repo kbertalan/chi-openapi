@@ -1,4 +1,4 @@
-package annot8
+package openapi
 
 import (
 	"go/ast"
@@ -27,15 +27,15 @@ func ensureTypeIndex() {
 	typeIndexOnce.Do(func() {
 		// load module path for package classification
 		loadModulePath()
-		slog.Debug("[annot8] cache.go: initializing typeIndex and externalKnownTypes")
+		slog.Debug("[openapi] cache.go: initializing typeIndex and externalKnownTypes")
 		// Build type index once at startup
 		typeIndex = BuildTypeIndex()
 
-		slog.Debug("[annot8] cache.go: typeIndex built, setting externalKnownTypes")
+		slog.Debug("[openapi] cache.go: typeIndex built, setting externalKnownTypes")
 		typeIndex.externalKnownTypes = defaultExternalKnownTypes()
 		// Log the number of types and files indexed
 		slog.Debug(
-			"[annot8] cache.go: typeIndex initialized",
+			"[openapi] cache.go: typeIndex initialized",
 			"types",
 			len(typeIndex.types),
 			"files",
@@ -66,10 +66,10 @@ func BuildTypeIndex() *TypeIndex {
 	// Find project root by looking for go.mod
 	projectRoot := findProjectRoot()
 	if projectRoot == "" {
-		slog.Debug("[annot8] BuildTypeIndex: could not find project root, using current directory")
+		slog.Debug("[openapi] BuildTypeIndex: could not find project root, using current directory")
 		projectRoot = "."
 	} else {
-		slog.Debug("[annot8] BuildTypeIndex: using project root", "root", projectRoot)
+		slog.Debug("[openapi] BuildTypeIndex: using project root", "root", projectRoot)
 	}
 
 	_ = filepath.Walk(projectRoot, func(path string, info os.FileInfo, err error) error {
@@ -85,7 +85,7 @@ func BuildTypeIndex() *TypeIndex {
 
 	idx.externalKnownTypes = defaultExternalKnownTypes()
 
-	slog.Debug("[annot8] BuildTypeIndex: completed", "totalPackages", len(idx.types), "totalFiles", len(idx.files))
+	slog.Debug("[openapi] BuildTypeIndex: completed", "totalPackages", len(idx.types), "totalFiles", len(idx.files))
 	return idx
 }
 
@@ -181,7 +181,7 @@ func (idx *TypeIndex) indexFile(filePath string) error {
 	fset := token.NewFileSet()
 	file, err := parser.ParseFile(fset, filePath, nil, parser.ParseComments)
 	if err != nil {
-		slog.Debug("[annot8] BuildTypeIndex: failed to parse file", "path", filePath, "err", err)
+		slog.Debug("[openapi] BuildTypeIndex: failed to parse file", "path", filePath, "err", err)
 		return nil // Continue with other files
 	}
 
@@ -219,7 +219,7 @@ func (idx *TypeIndex) indexFile(filePath string) error {
 					idx.qualifiedTypes[qualifiedName] = ts
 
 					slog.Debug(
-						"[annot8] BuildTypeIndex: indexed type",
+						"[openapi] BuildTypeIndex: indexed type",
 						"package", pkg,
 						"type", typeName,
 						"qualified", qualifiedName,
@@ -235,10 +235,10 @@ func (idx *TypeIndex) indexFile(filePath string) error {
 
 func GetTypeIndex() *TypeIndex {
 	if typeIndex == nil {
-		slog.Error("[annot8] GetTypeIndex: typeIndex is nil, building type index")
+		slog.Error("[openapi] GetTypeIndex: typeIndex is nil, building type index")
 		typeIndex = BuildTypeIndex()
 	} else {
-		slog.Debug("[annot8] GetTypeIndex: returning existing typeIndex")
+		slog.Debug("[openapi] GetTypeIndex: returning existing typeIndex")
 	}
 	return typeIndex
 }
@@ -341,14 +341,14 @@ func (idx *TypeIndex) GetQualifiedTypeName(typeName string) string {
 func AddExternalKnownType(name string, schema *Schema) {
 	ensureTypeIndex() // Ensure typeIndex is initialized
 	if typeIndex == nil {
-		slog.Error("[annot8] AddExternalKnownType: typeIndex is nil, cannot add external type", "name", name)
+		slog.Error("[openapi] AddExternalKnownType: typeIndex is nil, cannot add external type", "name", name)
 		return
 	}
 	if typeIndex.externalKnownTypes == nil {
 		typeIndex.externalKnownTypes = make(map[string]*Schema)
 	}
 	typeIndex.externalKnownTypes[name] = schema
-	slog.Debug("[annot8] AddExternalKnownType: added external known type", "name", name)
+	slog.Debug("[openapi] AddExternalKnownType: added external known type", "name", name)
 }
 
 // resetTypeIndexForTesting resets the type index for testing purposes

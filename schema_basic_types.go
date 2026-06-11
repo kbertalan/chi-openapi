@@ -1,5 +1,5 @@
 // Package openapi defines helpers for OpenAPI schema generation from Go types.
-package annot8
+package openapi
 
 import (
 	"strings"

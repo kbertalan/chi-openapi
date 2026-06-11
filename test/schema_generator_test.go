@@ -1,9 +1,9 @@
-package annot8_test
+package openapi_test
 
 import (
 	"testing"
 
-	annot8 "github.com/AxelTahmid/annot8"
+	openapi "github.com/kbertalan/chi-openapi"
 )
 
 func TestSchemaGenerator_PrimitiveAndCollectionTypes(t *testing.T) {
@@ -13,12 +13,12 @@ func TestSchemaGenerator_PrimitiveAndCollectionTypes(t *testing.T) {
 	tests := []struct {
 		name     string
 		typeName string
-		assert   func(*testing.T, *annot8.Schema)
+		assert   func(*testing.T, *openapi.Schema)
 	}{
 		{
 			name:     "int",
 			typeName: "int",
-			assert: func(t *testing.T, schema *annot8.Schema) {
+			assert: func(t *testing.T, schema *openapi.Schema) {
 				AssertEqual(t, "integer", schema.Type)
 				AssertEqual(t, "", schema.Ref)
 			},
@@ -26,7 +26,7 @@ func TestSchemaGenerator_PrimitiveAndCollectionTypes(t *testing.T) {
 		{
 			name:     "string",
 			typeName: "string",
-			assert: func(t *testing.T, schema *annot8.Schema) {
+			assert: func(t *testing.T, schema *openapi.Schema) {
 				AssertEqual(t, "string", schema.Type)
 				AssertEqual(t, "", schema.Ref)
 			},
@@ -34,14 +34,14 @@ func TestSchemaGenerator_PrimitiveAndCollectionTypes(t *testing.T) {
 		{
 			name:     "bool pointer",
 			typeName: "*bool",
-			assert: func(t *testing.T, schema *annot8.Schema) {
+			assert: func(t *testing.T, schema *openapi.Schema) {
 				AssertDeepEqual(t, []string{"boolean", "null"}, schema.Type)
 			},
 		},
 		{
 			name:     "slice",
 			typeName: "[]string",
-			assert: func(t *testing.T, schema *annot8.Schema) {
+			assert: func(t *testing.T, schema *openapi.Schema) {
 				AssertEqual(t, "array", schema.Type)
 				if schema.Items == nil || schema.Items.Type != "string" {
 					t.Fatalf("expected string array items, got %+v", schema.Items)
@@ -51,7 +51,7 @@ func TestSchemaGenerator_PrimitiveAndCollectionTypes(t *testing.T) {
 		{
 			name:     "map",
 			typeName: "map[string]int",
-			assert: func(t *testing.T, schema *annot8.Schema) {
+			assert: func(t *testing.T, schema *openapi.Schema) {
 				AssertEqual(t, "object", schema.Type)
 			},
 		},
@@ -76,8 +76,8 @@ func TestSchemaGenerator_ReferenceEmission(t *testing.T) {
 	}
 
 	stored := sg.GetSchemas()
-	if _, ok := stored["annot8.TestSimple"]; !ok {
-		t.Fatalf("expected stored schema for annot8.TestSimple, got %v", stored)
+	if _, ok := stored["openapi.TestSimple"]; !ok {
+		t.Fatalf("expected stored schema for openapi.TestSimple, got %v", stored)
 	}
 }
 
@@ -200,7 +200,7 @@ func TestSchemaGenerator_TagEnhancements(t *testing.T) {
 	t.Parallel()
 
 	sg := NewTestSchemaGenerator()
-	_ = sg.GenerateSchema("annot8.TagExample")
+	_ = sg.GenerateSchema("openapi.TagExample")
 	schema := FindSchemaBySuffix(t, sg.GetSchemas(), ".TagExample")
 
 	id := schema.Properties["id"]

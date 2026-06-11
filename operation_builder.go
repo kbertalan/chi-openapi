@@ -1,4 +1,4 @@
-package annot8
+package openapi
 
 import (
 	"log/slog"
@@ -18,7 +18,7 @@ func (g *Generator) buildOperation(
 	route, method string,
 	middlewares []func(http.Handler) http.Handler,
 ) Operation {
-	slog.Debug("[annot8] buildOperation: called", "route", route, "method", method)
+	slog.Debug("[openapi] buildOperation: called", "route", route, "method", method)
 
 	handlerInfo := g.extractHandlerInfo(handler, route)
 
@@ -27,7 +27,7 @@ func (g *Generator) buildOperation(
 		var err error
 		annotations, err = ParseAnnotations(handlerInfo.File, handlerInfo.FunctionName)
 		if err != nil {
-			slog.Warn("[annot8] buildOperation: annotations parse error", "error", err)
+			slog.Warn("[openapi] buildOperation: annotations parse error", "error", err)
 		}
 	}
 
@@ -87,13 +87,13 @@ func (g *Generator) buildOperation(
 		}
 	}
 
-	slog.Debug("[annot8] buildOperation: completed", "operationId", op.OperationID)
+	slog.Debug("[openapi] buildOperation: completed", "operationId", op.OperationID)
 	return op
 }
 
 // buildResponses assembles HTTP responses using annotations as hints.
 func (g *Generator) buildResponses(annotations *Annotation) map[string]Response {
-	slog.Debug("[annot8] buildResponses: called")
+	slog.Debug("[openapi] buildResponses: called")
 
 	responses := make(map[string]Response)
 
@@ -164,7 +164,7 @@ func (g *Generator) buildResponses(annotations *Annotation) map[string]Response 
 		}
 	}
 
-	slog.Debug("[annot8] buildResponses: completed", "response_count", len(responses))
+	slog.Debug("[openapi] buildResponses: completed", "response_count", len(responses))
 	return responses
 }
 
@@ -178,7 +178,7 @@ func problemJSON() map[string]MediaTypeObject {
 
 // buildRequestBody constructs a request body definition.
 func (g *Generator) buildRequestBody(annotations *Annotation) *RequestBody {
-	slog.Debug("[annot8] buildRequestBody: called")
+	slog.Debug("[openapi] buildRequestBody: called")
 
 	var (
 		schema      *Schema
@@ -190,7 +190,7 @@ func (g *Generator) buildRequestBody(annotations *Annotation) *RequestBody {
 			if param.In != "body" {
 				continue
 			}
-			slog.Debug("[annot8] buildRequestBody: found body parameter", "type", param.Type)
+			slog.Debug("[openapi] buildRequestBody: found body parameter", "type", param.Type)
 
 			schema = g.schemaGen.GenerateSchema(param.Type)
 			if param.Description != "" {
@@ -201,7 +201,7 @@ func (g *Generator) buildRequestBody(annotations *Annotation) *RequestBody {
 	}
 
 	if schema == nil {
-		slog.Debug("[annot8] buildRequestBody: no body parameter found, using default object schema")
+		slog.Debug("[openapi] buildRequestBody: no body parameter found, using default object schema")
 		schema = &Schema{Type: "object"}
 	}
 
@@ -216,7 +216,7 @@ func (g *Generator) buildRequestBody(annotations *Annotation) *RequestBody {
 
 // generateResponseSchema resolves the schema referenced by an annotation.
 func (g *Generator) generateResponseSchema(dataType string) *Schema {
-	slog.Debug("[annot8] generateResponseSchema: called", "dataType", dataType)
+	slog.Debug("[openapi] generateResponseSchema: called", "dataType", dataType)
 
 	if dataType == "" {
 		return &Schema{Type: "object"}
@@ -238,7 +238,7 @@ func (g *Generator) generateResponseSchema(dataType string) *Schema {
 
 // addStandardSchemas seeds reusable schemas.
 func (g *Generator) addStandardSchemas(spec *Spec) {
-	slog.Debug("[annot8] addStandardSchemas: adding ProblemDetails schema")
+	slog.Debug("[openapi] addStandardSchemas: adding ProblemDetails schema")
 
 	spec.Components.Schemas["ProblemDetails"] = Schema{
 		Type: "object",
@@ -269,7 +269,7 @@ func (g *Generator) addStandardSchemas(spec *Spec) {
 
 // buildTags produces tag entries sorted for determinism.
 func (g *Generator) buildTags(tagNames map[string]bool) []Tag {
-	slog.Debug("[annot8] buildTags: called", "tag_count", len(tagNames))
+	slog.Debug("[openapi] buildTags: called", "tag_count", len(tagNames))
 
 	var tags []Tag
 	for name := range tagNames {

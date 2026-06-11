@@ -1,5 +1,5 @@
-// Package annot8 provides JSON-schema tag parsing utilities.
-package annot8
+// Package openapi provides JSON-schema tag parsing utilities.
+package openapi
 
 import (
 	"strconv"
@@ -35,8 +35,8 @@ func extractTag(tag, key string) string {
 
 // applyEnhancedTags applies OpenAPI 3.1 metadata from struct tags to a schema.
 func (sg *SchemaGenerator) applyEnhancedTags(schema *Schema, tag string) {
-	// Parse annot8 tag for enhanced features
-	if openapiTag := extractTag(tag, "annot8"); openapiTag != "" {
+	// Parse openapi tag for enhanced features
+	if openapiTag := extractTag(tag, "openapi"); openapiTag != "" {
 		parts := strings.Split(openapiTag, ",")
 		for _, part := range parts {
 			part = strings.TrimSpace(part)

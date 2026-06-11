@@ -1,4 +1,4 @@
-package annot8
+package openapi
 
 import (
 	"fmt"
@@ -84,13 +84,13 @@ func ParseAnnotations(filePath, functionName string) (*Annotation, error) {
 	// If no AST file found in TypeIndex, attempt to parse it manually.
 	// This ensures that tests using local filenames or temporary files still work.
 	if astFile == nil {
-		slog.Debug("[annot8] ParseAnnotations: file not found in TypeIndex, attempting manual parse", "filePath", normalizedFilePath)
+		slog.Debug("[openapi] ParseAnnotations: file not found in TypeIndex, attempting manual parse", "filePath", normalizedFilePath)
 		fset := token.NewFileSet()
 		var err error
 		// Parse only comments as we only need those for annotations
 		astFile, err = parser.ParseFile(fset, normalizedFilePath, nil, parser.ParseComments)
 		if err != nil {
-			slog.Warn("[annot8] ParseAnnotations: failed to parse file manually", "filePath", normalizedFilePath, "error", err)
+			slog.Warn("[openapi] ParseAnnotations: failed to parse file manually", "filePath", normalizedFilePath, "error", err)
 			return nil, nil // Cannot proceed without AST
 		}
 	}
@@ -110,7 +110,7 @@ func ParseAnnotations(filePath, functionName string) (*Annotation, error) {
 	// handler_addons.go with a List method).
 	if strings.Contains(functionName, ".") && typeIndex != nil {
 		slog.Debug(
-			"[annot8] ParseAnnotations: starting TypeIndex disambiguation",
+			"[openapi] ParseAnnotations: starting TypeIndex disambiguation",
 			"filePath",
 			filePath,
 			"functionName",
@@ -134,7 +134,7 @@ func ParseAnnotations(filePath, functionName string) (*Annotation, error) {
 						normalizedFilePath = filepath.ToSlash(filePath)
 						normalizedFilePath = normalizedCandidate
 						slog.Debug(
-							"[annot8] ParseAnnotations: selected AST from TypeIndex",
+							"[openapi] ParseAnnotations: selected AST from TypeIndex",
 							"selected",
 							p,
 							"targetFileName",
@@ -157,14 +157,14 @@ func ParseAnnotations(filePath, functionName string) (*Annotation, error) {
 						filePath = p
 						normalizedFilePath = filepath.ToSlash(filePath)
 						normalizedFilePath = normalizedCandidate
-						slog.Debug("[annot8] ParseAnnotations: selected AST from TypeIndex", "selected", p, "candidate", cand)
+						slog.Debug("[openapi] ParseAnnotations: selected AST from TypeIndex", "selected", p, "candidate", cand)
 						break
 					}
 				}
 			}
 		}
 	} else {
-		slog.Debug("[annot8] ParseAnnotations: no TypeIndex disambiguation performed", "filePath", filePath, "functionName", functionName)
+		slog.Debug("[openapi] ParseAnnotations: no TypeIndex disambiguation performed", "filePath", filePath, "functionName", functionName)
 	}
 
 	// Find the function and its comment
@@ -177,7 +177,7 @@ func ParseAnnotations(filePath, functionName string) (*Annotation, error) {
 	}
 
 	slog.Debug(
-		"[annot8] ParseAnnotations: locating function comments",
+		"[openapi] ParseAnnotations: locating function comments",
 		"filePath",
 		filePath,
 		"qualified",
@@ -192,7 +192,7 @@ func ParseAnnotations(filePath, functionName string) (*Annotation, error) {
 				if funcDecl.Doc != nil {
 					comment = funcDecl.Doc.Text()
 					slog.Debug(
-						"[annot8] ParseAnnotations: comment block found",
+						"[openapi] ParseAnnotations: comment block found",
 						"file",
 						filePath,
 						"function",
@@ -202,7 +202,7 @@ func ParseAnnotations(filePath, functionName string) (*Annotation, error) {
 				}
 				// found function but no doc comments
 				slog.Debug(
-					"[annot8] ParseAnnotations: function found but missing comments",
+					"[openapi] ParseAnnotations: function found but missing comments",
 					"file",
 					filePath,
 					"function",
@@ -214,7 +214,7 @@ func ParseAnnotations(filePath, functionName string) (*Annotation, error) {
 
 	if comment == "" {
 		slog.Debug(
-			"[annot8] ParseAnnotations: no annotation comment found",
+			"[openapi] ParseAnnotations: no annotation comment found",
 			"file",
 			filePath,
 			"function",
@@ -225,7 +225,7 @@ func ParseAnnotations(filePath, functionName string) (*Annotation, error) {
 
 	annotation, err := parseAnnotationComment(comment)
 	if err != nil {
-		slog.Warn("[annot8] ParseAnnotations: parsing errors", "error", err)
+		slog.Warn("[openapi] ParseAnnotations: parsing errors", "error", err)
 	}
 
 	return annotation, nil
@@ -313,7 +313,7 @@ func parseAnnotationComment(comment string) (*Annotation, error) {
 // converts it into a SuccessResponse containing status code, data type
 // and an optional quoted description.
 func parseSuccessAnnotation(line string) (*SuccessResponse, error) {
-	slog.Debug("[annot8] parseSuccessAnnotation: called", "line", line)
+	slog.Debug("[openapi] parseSuccessAnnotation: called", "line", line)
 	// @Success 200 {data} Type "Description"
 	content := strings.TrimPrefix(line, "@Success ")
 	parts := strings.Fields(content)
@@ -357,7 +357,7 @@ func parseSuccessAnnotation(line string) (*SuccessResponse, error) {
 // parseParamAnnotation parses a single @Param line into a ParamAnnotation
 // structure. Expected format is: @Param <name> <in> <type> <required> "desc"
 func parseParamAnnotation(line string) (*ParamAnnotation, error) {
-	slog.Debug("[annot8] parseParamAnnotation: called", "line", line)
+	slog.Debug("[openapi] parseParamAnnotation: called", "line", line)
 	// @Param name in type required "description"
 	content := strings.TrimPrefix(line, "@Param ")
 	parts := strings.Fields(content)
@@ -385,7 +385,7 @@ func parseParamAnnotation(line string) (*ParamAnnotation, error) {
 // parseFailureAnnotation parses @Failure lines into an ErrorResponse. It
 // extracts the numeric status code and optional quoted description.
 func parseFailureAnnotation(line string) (*ErrorResponse, error) {
-	slog.Debug("[annot8] parseFailureAnnotation: called", "line", line)
+	slog.Debug("[openapi] parseFailureAnnotation: called", "line", line)
 	// @Failure 400 {object} Type "Description"
 	content := strings.TrimPrefix(line, "@Failure ")
 	parts := strings.Fields(content)

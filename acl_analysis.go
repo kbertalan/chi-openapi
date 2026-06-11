@@ -1,4 +1,4 @@
-package annot8
+package openapi
 
 import (
 	"go/ast"
