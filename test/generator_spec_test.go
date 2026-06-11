@@ -86,6 +86,7 @@ type invoicesHandler struct{}
 // @Tags invoices
 // @Param id path int true "Invoice ID"
 // @Success 201 {object} CreateInvoiceResponse "created"
+// @Failure 400 {object} InvalidRequest "invalid invoice creation request"
 func (h *invoicesHandler) create(w http.ResponseWriter, r *http.Request) {}
 
 func TestGenerateSpecRoutes_MethodReceiver(t *testing.T) {
@@ -129,6 +130,36 @@ func TestGenerateSpecRoutes_MethodReceiver(t *testing.T) {
 	}
 	if !foundID {
 		t.Errorf("expected path parameter 'id' in operation parameters, got %+v", op.Parameters)
+	}
+
+	expectedSuccess := openapi.Response{
+		Description: "created",
+		Content: map[string]openapi.MediaTypeObject{
+			"application/json": {
+				Schema: &openapi.Schema{Ref: "#/components/schemas/CreateInvoiceResponse"},
+			},
+		},
+	}
+
+	expectedFailure := openapi.Response{
+		Description: "invalid invoice creation request",
+		Content: map[string]openapi.MediaTypeObject{
+			"application/problem+json": {
+				Schema: &openapi.Schema{Ref: "#/components/schemas/InvalidRequest"},
+			},
+		},
+	}
+
+	for status, response := range op.Responses {
+		if status == "201" {
+			AssertDeepEqual(t, expectedSuccess, response)
+			continue
+		}
+		if status == "400" {
+			AssertDeepEqual(t, expectedFailure, response)
+			continue
+		}
+		t.Errorf("unexpected response %s: %+v", status, response)
 	}
 }
 

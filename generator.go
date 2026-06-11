@@ -110,8 +110,6 @@ func (g *Generator) GenerateSpec(router chi.Router, cfg Config) Spec {
 		Description:  "JWT token authentication",
 	}
 
-	g.addStandardSchemas(&spec)
-
 	tags := make(map[string]bool)
 	routes, err := DiscoverRoutes(router)
 	if err != nil {

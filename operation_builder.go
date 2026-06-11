@@ -1,6 +1,7 @@
 package openapi
 
 import (
+	"fmt"
 	"log/slog"
 	"net/http"
 	"reflect"
@@ -143,37 +144,15 @@ func (g *Generator) buildResponses(annotations *Annotation) map[string]Response 
 				Description: failure.Description,
 				Content: map[string]MediaTypeObject{
 					"application/problem+json": {
-						Schema: &Schema{Ref: "#/components/schemas/ProblemDetails"},
+						Schema: &Schema{Ref: fmt.Sprintf("#/components/schemas/%s", failure.Type)},
 					},
 				},
 			}
 		}
 	}
 
-	standardErrors := map[string]Response{
-		"400": {Description: "Bad Request", Content: problemJSON()},
-		"401": {Description: "Unauthorized", Content: problemJSON()},
-		"403": {Description: "Forbidden", Content: problemJSON()},
-		"404": {Description: "Not Found", Content: problemJSON()},
-		"500": {Description: "Internal Server Error", Content: problemJSON()},
-	}
-
-	for code, response := range standardErrors {
-		if _, exists := responses[code]; !exists {
-			responses[code] = response
-		}
-	}
-
 	slog.Debug("[openapi] buildResponses: completed", "response_count", len(responses))
 	return responses
-}
-
-func problemJSON() map[string]MediaTypeObject {
-	return map[string]MediaTypeObject{
-		"application/problem+json": {
-			Schema: &Schema{Ref: "#/components/schemas/ProblemDetails"},
-		},
-	}
 }
 
 // buildRequestBody constructs a request body definition.
