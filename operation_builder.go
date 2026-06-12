@@ -65,10 +65,6 @@ func (g *Generator) buildOperation(
 		}
 	}
 
-	if len(op.Tags) == 0 {
-		op.Tags = []string{extractResourceFromRoute(route)}
-	}
-
 	if method == http.MethodPost || method == http.MethodPut || method == http.MethodPatch {
 		op.RequestBody = g.buildRequestBody(annotations)
 	}
@@ -296,16 +292,6 @@ func generateOperationID(method, route string) string {
 		cleanParts = append(cleanParts, capitalize(part))
 	}
 	return strings.ToLower(method) + strings.Join(cleanParts, "")
-}
-
-// extractResourceFromRoute returns the first meaningful route segment.
-func extractResourceFromRoute(route string) string {
-	for _, part := range strings.Split(strings.Trim(route, "/"), "/") {
-		if part != "" && part != "api" && part != "v1" && !strings.Contains(part, "{") {
-			return part
-		}
-	}
-	return "default"
 }
 
 // capitalize upper-cases the first rune of s.
