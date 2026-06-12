@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"reflect"
-	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -73,10 +71,6 @@ func (g *Generator) buildOperation(
 
 	if method == http.MethodPost || method == http.MethodPut || method == http.MethodPatch {
 		op.RequestBody = g.buildRequestBody(annotations)
-	}
-
-	if hasJWTMiddleware(middlewares) {
-		op.Security = []SecurityRequirement{{"BearerAuth": {}}}
 	}
 
 	if perms := g.resolveACLPermissions(route, method, handlerInfo, middlewares); len(perms) > 0 {
@@ -321,26 +315,6 @@ func extractResourceFromRoute(route string) string {
 		}
 	}
 	return "default"
-}
-
-// hasJWTMiddleware inspects middleware stack for auth middleware.
-func hasJWTMiddleware(middlewares []func(http.Handler) http.Handler) bool {
-	for _, mw := range middlewares {
-		funcName := runtime.FuncForPC(reflect.ValueOf(mw).Pointer()).Name()
-		if strings.Contains(funcName, "jwt") ||
-			strings.Contains(funcName, "JWT") ||
-			strings.Contains(funcName, "auth") ||
-			strings.Contains(funcName, "Authenticated") ||
-			strings.Contains(funcName, "Can") ||
-			strings.Contains(funcName, "Any") ||
-			strings.Contains(funcName, "Must") ||
-			strings.Contains(funcName, "IsSystemAdmin") ||
-			strings.Contains(funcName, "IsTenantAdmin") ||
-			strings.Contains(funcName, "IsTenant") {
-			return true
-		}
-	}
-	return false
 }
 
 // capitalize upper-cases the first rune of s.
