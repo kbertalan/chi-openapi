@@ -73,15 +73,6 @@ func (g *Generator) buildOperation(
 		op.RequestBody = g.buildRequestBody(annotations)
 	}
 
-	if perms := g.resolveACLPermissions(route, method, handlerInfo, middlewares); len(perms) > 0 {
-		aclInfo := "\n\nAccess control:\n- " + strings.Join(perms, "\n- ")
-		if op.Description != "" {
-			op.Description += aclInfo
-		} else {
-			op.Description = "This endpoint requires authentication." + aclInfo
-		}
-	}
-
 	slog.Debug("[openapi] buildOperation: completed", "operationId", op.OperationID)
 	return op
 }
