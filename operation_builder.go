@@ -15,7 +15,6 @@ import (
 func (g *Generator) buildOperation(
 	handler http.Handler,
 	route, method string,
-	middlewares []func(http.Handler) http.Handler,
 ) Operation {
 	slog.Debug("[openapi] buildOperation: called", "route", route, "method", method)
 

@@ -122,7 +122,7 @@ func (g *Generator) GenerateSpec(router chi.Router, cfg Config) Spec {
 		handler := ri.HandlerFunc
 		pathKey := convertRouteToOpenAPIPath(route)
 
-		operation := g.buildOperation(handler, route, method, ri.Middlewares)
+		operation := g.buildOperation(handler, route, method)
 
 		pathItem := spec.Paths[pathKey]
 		switch strings.ToUpper(method) {
