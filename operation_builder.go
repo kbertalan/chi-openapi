@@ -196,37 +196,6 @@ func (g *Generator) generateResponseSchema(dataType string) *Schema {
 	}
 }
 
-// addStandardSchemas seeds reusable schemas.
-func (g *Generator) addStandardSchemas(spec *Spec) {
-	slog.Debug("[openapi] addStandardSchemas: adding ProblemDetails schema")
-
-	spec.Components.Schemas["ProblemDetails"] = Schema{
-		Type: "object",
-		Properties: map[string]*Schema{
-			"type":   {Type: "string", Description: "A URI reference identifying the problem type"},
-			"title":  {Type: "string", Description: "A short, human-readable summary of the problem"},
-			"status": {Type: "integer", Description: "The HTTP status code"},
-			"detail": {Type: "string", Description: "Detailed explanation of the problem"},
-			"instance": {
-				Type:        "string",
-				Description: "A URI reference identifying the specific instance of the problem",
-			},
-		},
-		Required: []string{"type", "title", "status"},
-	}
-
-	spec.Components.Schemas["PaginationMeta"] = Schema{
-		Type: "object",
-		Properties: map[string]*Schema{
-			"has_next":              {Type: "boolean"},
-			"next_after_id":         {Type: "string", Description: "Opaque ID for pagination"},
-			"next_after_created_at": {Type: "string", Format: "date-time"},
-			"limit":                 {Type: "integer"},
-			"records":               {Type: "integer"},
-		},
-	}
-}
-
 // buildTags produces tag entries sorted for determinism.
 func (g *Generator) buildTags(tagNames map[string]bool) []Tag {
 	slog.Debug("[openapi] buildTags: called", "tag_count", len(tagNames))
