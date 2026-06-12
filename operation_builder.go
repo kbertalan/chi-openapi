@@ -83,23 +83,6 @@ func (g *Generator) buildResponses(annotations *Annotation) map[string]Response 
 		statusCode := strconv.Itoa(annotations.Success.StatusCode)
 
 		schema := g.generateResponseSchema(annotations.Success.DataType)
-		if annotations.Success.IsWrapped {
-			props := map[string]*Schema{
-				"message": {Type: "string"},
-				"data":    schema,
-			}
-
-			// Only include meta if the data type is a slice (implies pagination)
-			if strings.HasPrefix(strings.TrimPrefix(annotations.Success.DataType, "*"), "[]") {
-				props["meta"] = &Schema{Ref: "#/components/schemas/PaginationMeta"}
-			}
-
-			schema = &Schema{
-				Type:       "object",
-				Required:   []string{"message"},
-				Properties: props,
-			}
-		}
 
 		responses[statusCode] = Response{
 			Description: annotations.Success.Description,
