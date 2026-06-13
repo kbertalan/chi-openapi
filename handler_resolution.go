@@ -18,6 +18,7 @@ import (
 var (
 	trailingIdentRegexp  = regexp.MustCompile(`([A-Za-z_][A-Za-z0-9_]*)$`)
 	receiverMethodRegexp = regexp.MustCompile(`\(\*?([A-Za-z_][A-Za-z0-9_]*)\)\.([A-Za-z_][A-Za-z0-9_]*)$`)
+	anonFuncRegexp       = regexp.MustCompile(`\.func\d+(?:\.\d+)*$`)
 )
 
 // HandlerInfo describes the source location for a handler function.
@@ -33,6 +34,12 @@ func (g *Generator) extractHandlerInfo(handler http.Handler, route string) *Hand
 
 	handlerValue := reflect.ValueOf(handler)
 	if handlerValue.Kind() != reflect.Func {
+		slog.Warn(
+			"[openapi] ignoring handler: only HandlerFunc-style handlers are supported "+
+				"(a named function or a method on a receiver)",
+			"kind", handlerValue.Kind().String(),
+			"route", route,
+		)
 		return nil
 	}
 
@@ -49,6 +56,17 @@ func (g *Generator) extractHandlerInfo(handler http.Handler, route string) *Hand
 
 	file, _ := funcInfo.FileLine(pc)
 	rawName := funcInfo.Name()
+
+	if anonFuncRegexp.MatchString(strings.TrimSuffix(rawName, "-fm")) {
+		slog.Warn(
+			"[openapi] ignoring handler: anonymous functions are not supported "+
+				"(use a named function or a method on a receiver)",
+			"rawName", rawName,
+			"route", route,
+		)
+		return nil
+	}
+
 	name := resolveRuntimeName(rawName)
 
 	slog.Debug(
@@ -96,6 +114,15 @@ resolved:
 			file = alt
 			unique = buildUniqueFunctionName(file, name)
 		}
+	}
+
+	if name == "" || unique == "" {
+		slog.Warn(
+			"[openapi] ignoring handler: unable to resolve a function name",
+			"rawName", rawName,
+			"route", route,
+		)
+		return nil
 	}
 
 	hi := &HandlerInfo{File: file, FunctionName: unique}
