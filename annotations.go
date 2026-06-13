@@ -78,19 +78,25 @@ func ParseAnnotations(filePath, functionName string) (*Annotation, error) {
 
 	ensureTypeIndex() // Ensure typeIndex is initialized
 
+	// Canonicalize to the module-relative form used as the type-index key, so
+	// lookups succeed regardless of whether the binary was built with -trimpath.
+	normalizedFilePath = toModuleRelativePath(normalizedFilePath)
+
 	// Look up the AST in TypeIndex using normalized paths
 	astFile := typeIndex.LookupFile(normalizedFilePath)
 
 	// If no AST file found in TypeIndex, attempt to parse it manually.
 	// This ensures that tests using local filenames or temporary files still work.
 	if astFile == nil {
-		slog.Debug("[openapi] ParseAnnotations: file not found in TypeIndex, attempting manual parse", "filePath", normalizedFilePath)
+		// Convert back to a filesystem path so the file can actually be opened.
+		parsePath := fromModuleRelativePath(normalizedFilePath)
+		slog.Debug("[openapi] ParseAnnotations: file not found in TypeIndex, attempting manual parse", "filePath", parsePath)
 		fset := token.NewFileSet()
 		var err error
 		// Parse only comments as we only need those for annotations
-		astFile, err = parser.ParseFile(fset, normalizedFilePath, nil, parser.ParseComments)
+		astFile, err = parser.ParseFile(fset, parsePath, nil, parser.ParseComments)
 		if err != nil {
-			slog.Warn("[openapi] ParseAnnotations: failed to parse file manually", "filePath", normalizedFilePath, "error", err)
+			slog.Warn("[openapi] ParseAnnotations: failed to parse file manually", "filePath", parsePath, "error", err)
 			return nil, nil // Cannot proceed without AST
 		}
 	}

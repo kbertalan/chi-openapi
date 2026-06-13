@@ -55,6 +55,7 @@ func (g *Generator) extractHandlerInfo(handler http.Handler, route string) *Hand
 	}
 
 	file, _ := funcInfo.FileLine(pc)
+	file = toModuleRelativePath(file)
 	rawName := funcInfo.Name()
 
 	if anonFuncRegexp.MatchString(strings.TrimSuffix(rawName, "-fm")) {
@@ -89,9 +90,9 @@ func (g *Generator) extractHandlerInfo(handler http.Handler, route string) *Hand
 				}
 			}
 
-			if projectRoot := findProjectRoot(); projectRoot != "" {
-				if path := scanProjectForMethod(projectRoot, recvType, methodName); path != "" {
-					file = path
+			if root := findProjectRoot(); root != "" {
+				if path := scanProjectForMethod(root, recvType, methodName); path != "" {
+					file = toModuleRelativePath(path)
 					name = methodName
 					goto resolved
 				}

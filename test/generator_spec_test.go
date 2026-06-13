@@ -163,6 +163,38 @@ func TestGenerateSpecRoutes_MethodReceiver(t *testing.T) {
 	}
 }
 
+// listWidgets is a top-level named function handler. Unlike a method value, its
+// runtime file path is a real source path, which becomes module-relative under
+// -trimpath. This test guards that annotation resolution works in both builds.
+//
+// @Summary List widgets
+// @Description List all widgets for the tenant
+func listWidgets(w http.ResponseWriter, r *http.Request) {}
+
+func TestGenerateSpecRoutes_TopLevelFunction(t *testing.T) {
+	r := chi.NewRouter()
+	r.Get("/widgets", listWidgets)
+
+	cfg := openapi.Config{Title: "Test Service", Version: "1.2.3"}
+	g := openapi.NewGenerator()
+	spec := g.GenerateSpec(r, cfg)
+
+	ops, ok := spec.Paths["/widgets"]
+	if !ok {
+		t.Fatalf("expected path '/widgets' in spec.Paths")
+	}
+	op := ops.Get
+	if op == nil {
+		t.Fatalf("expected GET operation for '/widgets'")
+	}
+	if op.Summary != "List widgets" {
+		t.Errorf("expected summary 'List widgets', got %q", op.Summary)
+	}
+	if op.Description != "List all widgets for the tenant" {
+		t.Errorf("expected description parsed, got %q", op.Description)
+	}
+}
+
 // TestGenerateSpec_MenuCouponCollision tests the exact scenario where menu and coupon
 // handlers both have "List" method names, ensuring they get distinct summaries.
 func TestGenerateSpec_MenuCouponCollision(t *testing.T) {
