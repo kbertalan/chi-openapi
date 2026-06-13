@@ -195,6 +195,43 @@ func TestGenerateSpecRoutes_TopLevelFunction(t *testing.T) {
 	}
 }
 
+// widgetRepo is a generic receiver type. The runtime renders its type argument
+// as a literal "[...]" (e.g. "(*widgetRepo[...]).List"), which must still resolve
+// to the base type so the method's annotations are found.
+type widgetRepo[T any, R any] struct {
+	items   []T
+	results []R
+}
+
+// @Summary List repo widgets
+// @Description List widgets from a generic repository
+func (r *widgetRepo[T, R]) List(w http.ResponseWriter, req *http.Request) {}
+
+func TestGenerateSpecRoutes_GenericReceiver(t *testing.T) {
+	r := chi.NewRouter()
+	repo := &widgetRepo[int, float64]{}
+	r.Get("/repo/widgets", repo.List)
+
+	cfg := openapi.Config{Title: "Test Service", Version: "1.2.3"}
+	g := openapi.NewGenerator()
+	spec := g.GenerateSpec(r, cfg)
+
+	ops, ok := spec.Paths["/repo/widgets"]
+	if !ok {
+		t.Fatalf("expected path '/repo/widgets' in spec.Paths")
+	}
+	op := ops.Get
+	if op == nil {
+		t.Fatalf("expected GET operation for '/repo/widgets'")
+	}
+	if op.Summary != "List repo widgets" {
+		t.Errorf("expected summary 'List repo widgets', got %q", op.Summary)
+	}
+	if op.Description != "List widgets from a generic repository" {
+		t.Errorf("expected description parsed, got %q", op.Description)
+	}
+}
+
 // TestGenerateSpec_MenuCouponCollision tests the exact scenario where menu and coupon
 // handlers both have "List" method names, ensuring they get distinct summaries.
 func TestGenerateSpec_MenuCouponCollision(t *testing.T) {

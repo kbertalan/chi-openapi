@@ -19,6 +19,7 @@ var (
 	trailingIdentRegexp  = regexp.MustCompile(`([A-Za-z_][A-Za-z0-9_]*)$`)
 	receiverMethodRegexp = regexp.MustCompile(`\(\*?([A-Za-z_][A-Za-z0-9_]*)\)\.([A-Za-z_][A-Za-z0-9_]*)$`)
 	anonFuncRegexp       = regexp.MustCompile(`\.func\d+(?:\.\d+)*$`)
+	identRegexp          = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 )
 
 // HandlerInfo describes the source location for a handler function.
@@ -154,13 +155,48 @@ func resolveRuntimeName(raw string) string {
 	return name
 }
 
-// extractReceiverAndMethod parses the receiver type and method from a runtime name.
+// extractReceiverAndMethod parses the receiver type and method from a runtime
+// name, for both pointer (pkg.(*Type).Method) and value (pkg.Type.Method)
+// receivers, including generic types whose type arguments the runtime renders as
+// a literal "[...]" (e.g. pkg.(*Repo[...]).Get).
 func extractReceiverAndMethod(raw string) (recvType, method string, ok bool) {
-	rawClean := strings.TrimSuffix(raw, "-fm")
-	if m := receiverMethodRegexp.FindStringSubmatch(rawClean); len(m) == 3 {
+	name := strings.TrimSuffix(raw, "-fm")
+	// Generic type arguments are rendered as a literal "[...]"; strip them so the
+	// receiver collapses to its base type name.
+	name = strings.ReplaceAll(name, "[...]", "")
+
+	// Pointer receiver: <pkg>.(*Type).Method
+	if m := receiverMethodRegexp.FindStringSubmatch(name); len(m) == 3 {
 		return m[1], m[2], true
 	}
+
+	// Value receiver: <pkg>.Type.Method — exactly three dot-separated identifiers
+	// in the final path segment (two would be a plain <pkg>.Func, not a method).
+	seg := name
+	if i := strings.LastIndex(seg, "/"); i >= 0 {
+		seg = seg[i+1:]
+	}
+	if parts := strings.Split(seg, "."); len(parts) == 3 &&
+		identRegexp.MatchString(parts[1]) && identRegexp.MatchString(parts[2]) {
+		return parts[1], parts[2], true
+	}
 	return "", "", false
+}
+
+// receiverTypeName returns the base type name of a method receiver expression,
+// unwrapping pointers (*T) and generic instantiations (T[X], T[X, Y]).
+func receiverTypeName(expr ast.Expr) string {
+	switch t := expr.(type) {
+	case *ast.StarExpr:
+		return receiverTypeName(t.X)
+	case *ast.IndexExpr:
+		return receiverTypeName(t.X)
+	case *ast.IndexListExpr:
+		return receiverTypeName(t.X)
+	case *ast.Ident:
+		return t.Name
+	}
+	return ""
 }
 
 // handlerCandidate is a handler method declaration found in the type index.
@@ -184,19 +220,12 @@ func findCandidatesInTypeIndex(ti *TypeIndex, recvType, methodName, route string
 			if !ok || fd.Recv == nil || fd.Name == nil || fd.Name.Name != methodName {
 				continue
 			}
-			if len(fd.Recv.List) == 0 {
+			if len(fd.Recv.List) == 0 || fd.Doc == nil {
 				continue
 			}
 
-			switch recv := fd.Recv.List[0].Type.(type) {
-			case *ast.StarExpr:
-				if ident, ok := recv.X.(*ast.Ident); ok && ident.Name == recvType && fd.Doc != nil {
-					candidates = append(candidates, handlerCandidate{path: path, method: methodName, pkgName: pkgName})
-				}
-			case *ast.Ident:
-				if recv.Name == recvType && fd.Doc != nil {
-					candidates = append(candidates, handlerCandidate{path: path, method: methodName, pkgName: pkgName})
-				}
+			if receiverTypeName(fd.Recv.List[0].Type) == recvType {
+				candidates = append(candidates, handlerCandidate{path: path, method: methodName, pkgName: pkgName})
 			}
 		}
 	}
@@ -333,21 +362,13 @@ func scanProjectForMethod(projectRoot, recvType, methodName string) string {
 				continue
 			}
 
-			if len(fd.Recv.List) == 0 {
+			if len(fd.Recv.List) == 0 || fd.Doc == nil {
 				continue
 			}
 
-			switch recv := fd.Recv.List[0].Type.(type) {
-			case *ast.StarExpr:
-				if ident, ok := recv.X.(*ast.Ident); ok && ident.Name == recvType && fd.Doc != nil {
-					foundPath = path
-					return filepath.SkipDir
-				}
-			case *ast.Ident:
-				if recv.Name == recvType && fd.Doc != nil {
-					foundPath = path
-					return filepath.SkipDir
-				}
+			if receiverTypeName(fd.Recv.List[0].Type) == recvType {
+				foundPath = path
+				return filepath.SkipDir
 			}
 		}
 
@@ -442,12 +463,5 @@ func receiverMatches(fd *ast.FuncDecl, recvType string) bool {
 	if fd.Recv == nil || len(fd.Recv.List) == 0 {
 		return false
 	}
-	switch recv := fd.Recv.List[0].Type.(type) {
-	case *ast.StarExpr:
-		ident, ok := recv.X.(*ast.Ident)
-		return ok && ident.Name == recvType
-	case *ast.Ident:
-		return recv.Name == recvType
-	}
-	return false
+	return receiverTypeName(fd.Recv.List[0].Type) == recvType
 }
