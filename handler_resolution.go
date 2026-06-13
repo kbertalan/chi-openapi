@@ -162,16 +162,22 @@ func extractReceiverAndMethod(raw string) (recvType, method string, ok bool) {
 	return "", "", false
 }
 
+// handlerCandidate is a handler method declaration found in the type index.
+type handlerCandidate struct {
+	path    string
+	method  string
+	pkgName string
+}
+
 // findCandidatesInTypeIndex locates handler methods in the type index.
 func findCandidatesInTypeIndex(ti *TypeIndex, recvType, methodName, route string) (path, method string, found bool) {
-	type candidate struct {
-		path   string
-		method string
-	}
-
-	var candidates []candidate
+	var candidates []handlerCandidate
 
 	for path, af := range ti.files {
+		pkgName := ""
+		if af.Name != nil {
+			pkgName = af.Name.Name
+		}
 		for _, decl := range af.Decls {
 			fd, ok := decl.(*ast.FuncDecl)
 			if !ok || fd.Recv == nil || fd.Name == nil || fd.Name.Name != methodName {
@@ -184,62 +190,125 @@ func findCandidatesInTypeIndex(ti *TypeIndex, recvType, methodName, route string
 			switch recv := fd.Recv.List[0].Type.(type) {
 			case *ast.StarExpr:
 				if ident, ok := recv.X.(*ast.Ident); ok && ident.Name == recvType && fd.Doc != nil {
-					candidates = append(candidates, candidate{path: path, method: methodName})
+					candidates = append(candidates, handlerCandidate{path: path, method: methodName, pkgName: pkgName})
 				}
 			case *ast.Ident:
 				if recv.Name == recvType && fd.Doc != nil {
-					candidates = append(candidates, candidate{path: path, method: methodName})
+					candidates = append(candidates, handlerCandidate{path: path, method: methodName, pkgName: pkgName})
 				}
 			}
 		}
 	}
 
+	if best := disambiguateCandidates(candidates, recvType, methodName, route); best != nil {
+		return best.path, best.method, true
+	}
+	return "", "", false
+}
+
+// disambiguateCandidates picks the single candidate that best matches the route,
+// returning nil when there are no candidates or the choice is ambiguous. The
+// winner is the candidate whose receiver type, method name, file path segments
+// and package name match the most route segments; a tie (or no matches at all)
+// is treated as ambiguous and logged.
+func disambiguateCandidates(candidates []handlerCandidate, recvType, methodName, route string) *handlerCandidate {
 	if len(candidates) == 0 {
-		return "", "", false
+		return nil
 	}
 	if len(candidates) == 1 {
-		return candidates[0].path, candidates[0].method, true
-	}
-
-	parts := strings.Split(route, "/")
-	var meaningful []string
-	for _, seg := range parts {
-		if seg == "" || seg == "v1" || seg == "api" || strings.ContainsAny(seg, "{}*") {
-			continue
-		}
-		meaningful = append(meaningful, seg)
-	}
-
-	var routeSeg, penult string
-	if len(meaningful) > 0 {
-		routeSeg = meaningful[len(meaningful)-1]
-		if len(meaningful) > 1 {
-			penult = meaningful[len(meaningful)-2]
-		}
+		return &candidates[0]
 	}
 
 	sort.Slice(candidates, func(i, j int) bool { return candidates[i].path < candidates[j].path })
 
-	if penult != "" {
-		for _, c := range candidates {
-			if strings.Contains(c.path, "/"+penult+"/") || strings.Contains(filepath.Base(c.path), penult) {
-				return c.path, c.method, true
+	segments := routeMatchSegments(route)
+
+	bestScore := -1
+	bestIdx := -1
+	tie := false
+	for i, c := range candidates {
+		identifiers := append([]string{recvType, c.method}, pathSegments(c.path)...)
+
+		if c.pkgName != "" && !strings.EqualFold(c.pkgName, filepath.Base(filepath.Dir(c.path))) {
+			identifiers = append(identifiers, c.pkgName)
+		}
+		score := scoreRouteSegments(segments, identifiers...)
+		switch {
+		case score > bestScore:
+			bestScore, bestIdx, tie = score, i, false
+		case score == bestScore:
+			tie = true
+		}
+	}
+
+	if bestScore <= 0 || tie {
+		paths := make([]string, len(candidates))
+		for i, c := range candidates {
+			paths[i] = c.path
+		}
+		slog.Warn(
+			"[openapi] ignoring handler: ambiguous receiver+method, unable to pick a single file",
+			"receiver", recvType,
+			"method", methodName,
+			"route", route,
+			"candidates", paths,
+		)
+		return nil
+	}
+
+	return &candidates[bestIdx]
+}
+
+// routeMatchSegments returns the route path segments used for disambiguation,
+// excluding empty segments, path parameters ({...}) and catch-all (*).
+func routeMatchSegments(route string) []string {
+	var segments []string
+	for seg := range strings.SplitSeq(route, "/") {
+		if seg == "" || strings.ContainsAny(seg, "{}*") {
+			continue
+		}
+		segments = append(segments, seg)
+	}
+	return segments
+}
+
+// pathSegments returns the directory segments and the file-name stem of a file
+// path, used as additional identifiers for route disambiguation (e.g. a handler
+// in ".../billing/invoices/handler.go" yields "billing", "invoices", "handler").
+func pathSegments(path string) []string {
+	var segments []string
+	for seg := range strings.SplitSeq(filepath.ToSlash(path), "/") {
+		if seg == "" {
+			continue
+		}
+		segments = append(segments, strings.TrimSuffix(seg, ".go"))
+	}
+	return segments
+}
+
+// scoreRouteSegments counts how many route segments match any of the given
+// identifiers (package name, receiver type, method name, and the file's
+// directory path segments). Matching is case-insensitive and bidirectional
+// substring, so "users" matches both a "user" package and a "ListUsers" method.
+func scoreRouteSegments(segments []string, identifiers ...string) int {
+	lowered := make([]string, 0, len(identifiers))
+	for _, id := range identifiers {
+		if id != "" {
+			lowered = append(lowered, strings.ToLower(id))
+		}
+	}
+
+	count := 0
+	for _, seg := range segments {
+		s := strings.ToLower(seg)
+		for _, id := range lowered {
+			if strings.Contains(id, s) || strings.Contains(s, id) {
+				count++
+				break
 			}
 		}
 	}
-
-	for _, c := range candidates {
-		base := filepath.Base(c.path)
-		if strings.Contains(c.path, "/"+routeSeg+"/") ||
-			strings.HasSuffix(c.path, "/"+routeSeg+".go") ||
-			strings.Contains(c.path, routeSeg) ||
-			strings.Contains(base, routeSeg) ||
-			strings.Contains(base, routeSeg+"s") {
-			return c.path, c.method, true
-		}
-	}
-
-	return candidates[0].path, candidates[0].method, true
+	return count
 }
 
 // scanProjectForMethod walks the project and returns the first file that matches receiver+method.
