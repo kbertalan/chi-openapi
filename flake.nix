@@ -32,12 +32,6 @@
             unstable.air
             unstable.gotestsum
           ];
-
-          shellHook = ''
-            export GOPATH=`pwd`/.go
-            export GOCACHE=$GOPATH/.cache
-            export PATH=$GOPATH/bin:$PATH
-          '';
         };
       }
     );
