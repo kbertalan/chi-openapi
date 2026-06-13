@@ -91,7 +91,7 @@ func (g *Generator) extractHandlerInfo(handler http.Handler, route string) *Hand
 				}
 			}
 
-			if root := findProjectRoot(); root != "" {
+			for _, root := range moduleDirs() {
 				if path := scanProjectForMethod(root, recvType, methodName); path != "" {
 					file = toModuleRelativePath(path)
 					name = methodName

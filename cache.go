@@ -11,14 +11,26 @@ import (
 	"sort"
 	"strings"
 	"sync"
+
+	"golang.org/x/mod/modfile"
 )
 
 var (
 	typeIndex     *TypeIndex
 	typeIndexOnce sync.Once
-	modulePath    string // loaded from go.mod to identify internal packages
-	projectRoot   string // module root directory (the directory containing go.mod)
+	modulePath    string // primary module path (the module containing the cwd)
+	projectRoot   string // primary module root directory
+
+	modules     []moduleInfo // every module in scope (a Go workspace may have several)
+	modulesOnce sync.Once
 )
+
+// moduleInfo describes a single Go module in scope. With a go.work workspace
+// there may be several; otherwise there is exactly one.
+type moduleInfo struct {
+	dir  string // absolute, slash-normalized directory containing go.mod
+	path string // module path (e.g. "github.com/me/app")
+}
 
 // Find a way to add method that will add external known types to the type index
 // This is useful for types that are not defined in the current package but are known to the OpenAPI spec,
@@ -64,30 +76,48 @@ func BuildTypeIndex() *TypeIndex {
 		packageImports:     make(map[string]string),
 	}
 
-	// Find project root by looking for go.mod
-	projectRoot := findProjectRoot()
-	if projectRoot == "" {
-		slog.Debug("[openapi] BuildTypeIndex: could not find project root, using current directory")
-		projectRoot = "."
+	// Index every module in scope (a go.work workspace may declare several).
+	roots := moduleDirs()
+	if len(roots) == 0 {
+		slog.Debug("[openapi] BuildTypeIndex: no modules found, using current directory")
+		roots = []string{"."}
 	} else {
-		slog.Debug("[openapi] BuildTypeIndex: using project root", "root", projectRoot)
+		slog.Debug("[openapi] BuildTypeIndex: using module roots", "roots", roots)
 	}
 
-	_ = filepath.Walk(projectRoot, func(path string, info os.FileInfo, err error) error {
-		if err != nil ||
-			info.IsDir() ||
-			!strings.HasSuffix(path, ".go") ||
-			strings.HasSuffix(path, "_test.go") {
-			return err
-		}
-
-		return idx.indexFile(path)
-	})
+	for _, root := range roots {
+		idx.indexModule(root)
+	}
 
 	idx.externalKnownTypes = defaultExternalKnownTypes()
 
 	slog.Debug("[openapi] BuildTypeIndex: completed", "totalPackages", len(idx.types), "totalFiles", len(idx.files))
 	return idx
+}
+
+// indexModule walks a single module directory and indexes its Go source files,
+// skipping nested modules (subdirectories that declare their own go.mod).
+func (idx *TypeIndex) indexModule(root string) {
+	rootClean := filepath.Clean(root)
+	_ = filepath.Walk(root, func(p string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+		if info.IsDir() {
+			// A subdirectory with its own go.mod belongs to a different module;
+			// it is indexed under its own root (if in scope), not here.
+			if filepath.Clean(p) != rootClean {
+				if _, statErr := os.Stat(filepath.Join(p, "go.mod")); statErr == nil {
+					return filepath.SkipDir
+				}
+			}
+			return nil
+		}
+		if !strings.HasSuffix(p, ".go") || strings.HasSuffix(p, "_test.go") {
+			return nil
+		}
+		return idx.indexFile(p)
+	})
 }
 
 func defaultExternalKnownTypes() map[string]*Schema {
@@ -375,16 +405,25 @@ func (idx *TypeIndex) getQualifiedTypeName(pkg, typeName string) string {
 
 // isExternalPackage determines if a package is external/third-party
 func (idx *TypeIndex) isExternalPackage(pkg string) bool {
-	// If an import alias maps to a path outside the current module, treat as external
+	// If an import alias maps to a path outside every in-scope module, external.
 	for importPath, alias := range idx.packageImports {
 		if alias == pkg {
-			if modulePath != "" && strings.HasPrefix(importPath, modulePath) {
-				return false
-			}
-			return true
+			return !isInternalImportPath(importPath)
 		}
 	}
 	// Default to internal
+	return false
+}
+
+// isInternalImportPath reports whether an import path belongs to one of the
+// in-scope modules (the single module, or any module of a go.work workspace).
+func isInternalImportPath(importPath string) bool {
+	loadModules()
+	for _, m := range modules {
+		if importPath == m.path || strings.HasPrefix(importPath, m.path+"/") {
+			return true
+		}
+	}
 	return false
 }
 
@@ -415,52 +454,163 @@ func findProjectRoot() string {
 	return ""
 }
 
-// loadModulePath reads the Go module path from go.mod to distinguish internal vs external packages
-func loadModulePath() {
-	if modulePath != "" {
-		return
-	}
-	root := findProjectRoot()
-	if root == "" {
-		return
-	}
-	projectRoot = root
-	data, err := os.ReadFile(filepath.Join(root, "go.mod"))
-	if err != nil {
-		return
-	}
-	for _, line := range strings.Split(string(data), "\n") {
-		if strings.HasPrefix(line, "module ") {
-			modulePath = strings.TrimSpace(strings.TrimPrefix(line, "module "))
-			return
+// loadModules discovers every Go module in scope, exactly once. With a go.work
+// workspace this is each `use`d module; otherwise it is the single module found
+// by walking up for go.mod. Modules are sorted by descending directory and path
+// length so that prefix matching against nested modules picks the most specific.
+func loadModules() {
+	modulesOnce.Do(func() {
+		modules = discoverModules()
+		sort.Slice(modules, func(i, j int) bool {
+			if len(modules[i].dir) != len(modules[j].dir) {
+				return len(modules[i].dir) > len(modules[j].dir)
+			}
+			return len(modules[i].path) > len(modules[j].path)
+		})
+	})
+}
+
+// discoverModules returns the modules in scope: the workspace modules when a
+// go.work is active, otherwise the single module containing the cwd.
+func discoverModules() []moduleInfo {
+	if workFile := findGoWork(); workFile != "" {
+		if mods := parseWorkspaceModules(workFile); len(mods) > 0 {
+			return mods
 		}
 	}
+
+	root := findProjectRoot()
+	if root == "" {
+		return nil
+	}
+	if mp := readModulePath(filepath.Join(root, "go.mod")); mp != "" {
+		return []moduleInfo{{dir: filepath.ToSlash(root), path: mp}}
+	}
+	return nil
+}
+
+// findGoWork locates the active go.work file, mirroring the go tool's rules:
+// GOWORK=off disables workspace mode, GOWORK=<path> names the file explicitly,
+// and an unset GOWORK triggers a search upward from the cwd.
+func findGoWork() string {
+	switch gw := os.Getenv("GOWORK"); gw {
+	case "off":
+		return ""
+	case "":
+		dir, err := os.Getwd()
+		if err != nil {
+			return ""
+		}
+		for {
+			candidate := filepath.Join(dir, "go.work")
+			if _, err := os.Stat(candidate); err == nil {
+				return candidate
+			}
+			parent := filepath.Dir(dir)
+			if parent == dir {
+				return ""
+			}
+			dir = parent
+		}
+	default:
+		return gw
+	}
+}
+
+// parseWorkspaceModules reads a go.work file and resolves each `use` directive
+// to a module (directory + module path read from its go.mod).
+func parseWorkspaceModules(workFile string) []moduleInfo {
+	data, err := os.ReadFile(workFile)
+	if err != nil {
+		return nil
+	}
+	wf, err := modfile.ParseWork(workFile, data, nil)
+	if err != nil {
+		slog.Debug("[openapi] parseWorkspaceModules: failed to parse go.work", "file", workFile, "err", err)
+		return nil
+	}
+
+	workDir := filepath.Dir(workFile)
+	var mods []moduleInfo
+	for _, use := range wf.Use {
+		dir := use.Path
+		if !filepath.IsAbs(dir) {
+			dir = filepath.Join(workDir, dir)
+		}
+		mp := readModulePath(filepath.Join(dir, "go.mod"))
+		if mp == "" {
+			slog.Debug("[openapi] parseWorkspaceModules: skipping use without module path", "dir", dir)
+			continue
+		}
+		mods = append(mods, moduleInfo{dir: filepath.ToSlash(dir), path: mp})
+	}
+	return mods
+}
+
+// readModulePath extracts the module path from a go.mod file, or "" on error.
+func readModulePath(goModPath string) string {
+	data, err := os.ReadFile(goModPath)
+	if err != nil {
+		return ""
+	}
+	return modfile.ModulePath(data)
+}
+
+// moduleDirs returns the filesystem directories of every in-scope module.
+func moduleDirs() []string {
+	loadModules()
+	dirs := make([]string, 0, len(modules))
+	for _, m := range modules {
+		dirs = append(dirs, filepath.FromSlash(m.dir))
+	}
+	return dirs
+}
+
+// loadModulePath resolves the primary module (the one containing the cwd, else
+// the first in scope) into modulePath/projectRoot for callers that assume a
+// single module.
+func loadModulePath() {
+	loadModules()
+	if modulePath != "" || len(modules) == 0 {
+		return
+	}
+
+	primary := modules[0]
+	if cwd, err := os.Getwd(); err == nil {
+		cwdSlash := filepath.ToSlash(cwd)
+		for _, m := range modules { // sorted longest-dir-first: most specific wins
+			if cwdSlash == m.dir || strings.HasPrefix(cwdSlash, m.dir+"/") {
+				primary = m
+				break
+			}
+		}
+	}
+	modulePath = primary.path
+	projectRoot = filepath.FromSlash(primary.dir)
 }
 
 // toModuleRelativePath converts a filesystem path to a module-relative path
 // (e.g. "github.com/me/app/handlers/users.go"). This is the canonical form used
 // as the type-index key and in HandlerInfo, matching what -trimpath emits, so
-// handler resolution behaves identically with or without -trimpath. If the
-// module path cannot be determined, or the file lies outside the module, the
-// slash-normalized input is returned unchanged.
+// handler resolution behaves identically with or without -trimpath. A path that
+// belongs to no in-scope module is returned slash-normalized but unchanged.
 func toModuleRelativePath(filePath string) string {
 	if filePath == "" || filePath == "<autogenerated>" {
 		return filePath
 	}
 	normalized := filepath.ToSlash(filePath)
+	loadModules()
 
-	loadModulePath()
-	if modulePath == "" {
-		return normalized
-	}
 	// Already module-relative (e.g. emitted by -trimpath).
-	if normalized == modulePath || strings.HasPrefix(normalized, modulePath+"/") {
-		return normalized
+	for _, m := range modules {
+		if normalized == m.path || strings.HasPrefix(normalized, m.path+"/") {
+			return normalized
+		}
 	}
-	if projectRoot != "" {
-		root := filepath.ToSlash(projectRoot)
-		if rel, ok := strings.CutPrefix(normalized, root+"/"); ok {
-			return modulePath + "/" + rel
+	// A filesystem path under a module directory becomes module-relative.
+	for _, m := range modules {
+		if rel, ok := strings.CutPrefix(normalized, m.dir+"/"); ok {
+			return m.path + "/" + rel
 		}
 	}
 	return normalized
@@ -471,10 +621,10 @@ func toModuleRelativePath(filePath string) string {
 // or already-absolute paths used by tests) are returned unchanged.
 func fromModuleRelativePath(filePath string) string {
 	normalized := filepath.ToSlash(filePath)
-	loadModulePath()
-	if modulePath != "" && projectRoot != "" {
-		if rel, ok := strings.CutPrefix(normalized, modulePath+"/"); ok {
-			return filepath.Join(projectRoot, filepath.FromSlash(rel))
+	loadModules()
+	for _, m := range modules {
+		if rel, ok := strings.CutPrefix(normalized, m.path+"/"); ok {
+			return filepath.Join(filepath.FromSlash(m.dir), filepath.FromSlash(rel))
 		}
 	}
 	return filePath
