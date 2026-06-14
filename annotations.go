@@ -18,24 +18,33 @@ type Annotation struct {
 	Description string
 	Tags        []string
 	Accept      []string
-	Produce     []string
-	Security    []string
+	Security    []SecurityReq     `tag:"Security"`
+	See         *ExternalDoc      `tag:"See"`
 	Parameters  []ParamAnnotation `tag:"Param"`
 	Success     *SuccessResponse  `tag:"Success"`
 	Failures    []ErrorResponse   `tag:"Failure"`
 }
 
-type SuccessResponse struct {
-	StatusCode  int
-	Marker      string
-	DataType    string
+// ExternalDoc is the @See directive: a link to external documentation, with an
+// optional human-readable description. It maps to Operation.ExternalDocs.
+type ExternalDoc struct {
+	URL         string
 	Description string
 }
 
-// IsWrapped reports whether the {data} marker was used (rather than {object}),
-// indicating the response payload is wrapped in a data envelope.
-func (r SuccessResponse) IsWrapped() bool {
-	return r.Marker == "{data}"
+// SecurityReq is one @Security directive: a security scheme name and optional
+// OAuth2 scopes. Each directive becomes one entry in Operation.Security (the
+// entries are OR-combined per the OpenAPI security model).
+type SecurityReq struct {
+	Scheme string
+	Scopes []string
+}
+
+type SuccessResponse struct {
+	StatusCode  int
+	DataType    string
+	Description string
+	Produce     []string
 }
 
 type ParamAnnotation struct {
@@ -48,15 +57,9 @@ type ParamAnnotation struct {
 
 type ErrorResponse struct {
 	StatusCode  int
-	Marker      string
 	Type        string
 	Description string
-}
-
-// IsWrapped reports whether the {data} marker was used (rather than {object}),
-// indicating the response payload is wrapped in a data envelope.
-func (r ErrorResponse) IsWrapped() bool {
-	return r.Marker == "{data}"
+	Produce     []string
 }
 
 // ParseAnnotations reads the AST for the provided Go source file (or the
@@ -242,8 +245,8 @@ func ParseAnnotations(filePath, functionName string) (*Annotation, error) {
 }
 
 // parseAnnotationComment decodes a doc-comment annotation block into an
-// Annotation using the serde DSL decoder. A bare @Accept/@Produce/@Security
-// (with no value) is reported as an error by the decoder.
+// Annotation using the serde DSL decoder. A bare @Accept (with no value) is
+// reported as an error by the decoder.
 func parseAnnotationComment(comment string) (*Annotation, error) {
 	annotation := &Annotation{}
 	if err := serde.Unmarshal(comment, annotation); err != nil {

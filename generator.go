@@ -3,6 +3,7 @@ package openapi
 import (
 	"fmt"
 	"log/slog"
+	"maps"
 	"sort"
 	"strings"
 	"sync"
@@ -61,7 +62,11 @@ func (g *Generator) GenerateSchema(typeName string) *Schema {
 }
 
 // GenerateSpec assembles an OpenAPI specification for the supplied router.
-func (g *Generator) GenerateSpec(router chi.Router, cfg Config) Spec {
+//
+// It returns an error if any @Security annotation references a security scheme
+// that is not declared in cfg.SecuritySchemes; the (partially built) spec is
+// still returned alongside the error for inspection.
+func (g *Generator) GenerateSpec(router chi.Router, cfg Config) (Spec, error) {
 	if cfg.Title == "" || cfg.Version == "" {
 		slog.Warn("[openapi] GenerateSpec: missing required config", "title", cfg.Title, "version", cfg.Version)
 	}
@@ -103,14 +108,12 @@ func (g *Generator) GenerateSpec(router chi.Router, cfg Config) Spec {
 		}
 	}
 
-	spec.Components.SecuritySchemes["BearerAuth"] = SecurityScheme{
-		Type:         "http",
-		Scheme:       "bearer",
-		BearerFormat: "JWT",
-		Description:  "JWT token authentication",
-	}
+	// Register the security schemes declared in config. Every @Security name
+	// must resolve to one of these.
+	maps.Copy(spec.Components.SecuritySchemes, cfg.SecuritySchemes)
 
 	tags := make(map[string]bool)
+	referencedSchemes := make(map[string]bool)
 	routes, err := DiscoverRoutes(router)
 	if err != nil {
 		slog.Warn("[openapi] GenerateSpec: InspectRoutes error", "error", err)
@@ -148,6 +151,26 @@ func (g *Generator) GenerateSpec(router chi.Router, cfg Config) Spec {
 		for _, tag := range operation.Tags {
 			tags[tag] = true
 		}
+		for _, req := range operation.Security {
+			for name := range req {
+				referencedSchemes[name] = true
+			}
+		}
+	}
+
+	// Every @Security scheme must be declared in Config.SecuritySchemes.
+	var missing []string
+	for name := range referencedSchemes {
+		if _, ok := spec.Components.SecuritySchemes[name]; !ok {
+			missing = append(missing, name)
+		}
+	}
+	if len(missing) > 0 {
+		sort.Strings(missing)
+		return spec, fmt.Errorf(
+			"[openapi] GenerateSpec: @Security references undeclared security scheme(s): %s (declare them in Config.SecuritySchemes)",
+			strings.Join(missing, ", "),
+		)
 	}
 
 	spec.Tags = g.buildTags(tags)
@@ -156,7 +179,7 @@ func (g *Generator) GenerateSpec(router chi.Router, cfg Config) Spec {
 	g.finalizeSchemas(&spec)
 
 	slog.Debug("[openapi] GenerateSpec: completed", "path_count", len(spec.Paths))
-	return spec
+	return spec, nil
 }
 
 // finalizeSchemas applies the naming strategy and resolves conflicts.

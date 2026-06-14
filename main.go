@@ -29,7 +29,11 @@ func GenerateOpenAPISpecFile(p *GenerateParams) error {
 	gen := NewGeneratorWithCache(typeIndex)
 	gen.SetModelNameFunc(renameFunc)
 
-	spec := gen.GenerateSpec(p.Router, p.Config)
+	spec, err := gen.GenerateSpec(p.Router, p.Config)
+	if err != nil {
+		slog.Error("[openapi] GenerateOpenAPISpecFile: failed to generate spec", "err", err)
+		return err
+	}
 
 	slog.Debug("[openapi] GenerateOpenAPISpecFile: writing OpenAPI spec to file", "version", spec.Info.Version)
 

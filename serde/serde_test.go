@@ -203,6 +203,53 @@ func TestUnmarshal(t *testing.T) {
 	}
 }
 
+// TestPositionalScalarSlice covers a struct whose trailing positional field is a
+// scalar slice: the single arg is parsed as a comma-separated list, while
+// omitting it leaves the slice nil. This backs the "@Security scheme scopes" form.
+func TestPositionalScalarSlice(t *testing.T) {
+	type secReq struct {
+		Scheme string
+		Scopes []string
+	}
+	type secDoc struct {
+		Sec []secReq `tag:"Sec"`
+	}
+
+	tests := []struct {
+		name string
+		in   string
+		want secDoc
+	}{
+		{
+			name: "scheme only leaves scopes nil",
+			in:   "@Sec ApiKey",
+			want: secDoc{Sec: []secReq{{Scheme: "ApiKey"}}},
+		},
+		{
+			name: "scheme with csv scopes",
+			in:   "@Sec OAuth2 read,write",
+			want: secDoc{Sec: []secReq{{Scheme: "OAuth2", Scopes: []string{"read", "write"}}}},
+		},
+		{
+			name: "multiple directives accumulate",
+			in:   "@Sec ApiKey\n@Sec OAuth2 read,write",
+			want: secDoc{Sec: []secReq{{Scheme: "ApiKey"}, {Scheme: "OAuth2", Scopes: []string{"read", "write"}}}},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var got secDoc
+			if err := Unmarshal(tc.in, &got); err != nil {
+				t.Fatalf("Unmarshal error: %v", err)
+			}
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("got  %+v\nwant %+v", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestUnmarshalBacktickMultiline(t *testing.T) {
 	in := "@Embed\n" +
 		"  @Code 7\n" +

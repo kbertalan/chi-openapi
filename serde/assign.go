@@ -93,6 +93,14 @@ func bindPositional(dst reflect.Value, info *structInfo, args []string, token st
 	}
 	for i, arg := range args {
 		fd := info.order[i]
+		// A scalar-slice field bound positionally consumes its single arg as a
+		// comma-separated list (e.g. "@Security OAuth2 read,write").
+		if fd.kind == kindSliceScalar {
+			if err := appendSliceScalar(dst.Field(fd.index), fd, arg, fd.token); err != nil {
+				return err
+			}
+			continue
+		}
 		if err := setScalar(dst.Field(fd.index), fd.kind, arg, fd.token); err != nil {
 			return err
 		}

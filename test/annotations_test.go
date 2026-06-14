@@ -3,6 +3,7 @@ package openapi_test
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -15,12 +16,13 @@ import (
 // @Description Test description
 // @Tags foo,bar
 // @Accept application/xml
-// @Produce application/json
 // @Security ApiKeyAuth
+// @Security OAuth2 read,write
+// @See https://docs.example.com "API guide"
 // @Param id path int true "ID param"
 // @Param q query string false "Query param"
-// @Success 200 {object} TestResponse "Success desc"
-// @Failure 400 {object} TestErrorResponse "Bad request"
+// @Success 200 TestResponse "Success desc" application/json
+// @Failure 400 TestErrorResponse "Bad request"
 func HandlerWithAnnotations() {}
 
 func TestParseAnnotations_AllAnnotations(t *testing.T) {
@@ -43,32 +45,52 @@ func TestParseAnnotations_AllAnnotations(t *testing.T) {
 	if len(annotation.Parameters) != 2 {
 		t.Errorf("expected 2 parameters, got %+v", annotation.Parameters)
 	}
-	// Accept, Produce and Security
+	// Accept
 	if len(annotation.Accept) != 1 || annotation.Accept[0] != "application/xml" {
 		t.Errorf("expected Accept [application/xml], got %v", annotation.Accept)
 	}
-	if len(annotation.Produce) != 1 || annotation.Produce[0] != "application/json" {
-		t.Errorf("expected Produce [application/json], got %v", annotation.Produce)
+	// Security: each @Security directive is one requirement, with optional scopes.
+	if len(annotation.Security) != 2 {
+		t.Fatalf("expected 2 security requirements, got %+v", annotation.Security)
 	}
-	if len(annotation.Security) != 1 || annotation.Security[0] != "ApiKeyAuth" {
-		t.Errorf("expected Security [ApiKeyAuth], got %v", annotation.Security)
+	if annotation.Security[0].Scheme != "ApiKeyAuth" || len(annotation.Security[0].Scopes) != 0 {
+		t.Errorf("expected Security[0] ApiKeyAuth with no scopes, got %+v", annotation.Security[0])
 	}
-	if annotation.Success == nil || annotation.Success.DataType != "TestResponse" {
-		t.Errorf("expected success DataType 'TestResponse', got %+v", annotation.Success)
+	if annotation.Security[1].Scheme != "OAuth2" ||
+		len(annotation.Security[1].Scopes) != 2 ||
+		annotation.Security[1].Scopes[0] != "read" ||
+		annotation.Security[1].Scopes[1] != "write" {
+		t.Errorf("expected Security[1] OAuth2 [read write], got %+v", annotation.Security[1])
+	}
+	// See -> external documentation.
+	if annotation.See == nil ||
+		annotation.See.URL != "https://docs.example.com" ||
+		annotation.See.Description != "API guide" {
+		t.Errorf("expected See {https://docs.example.com, API guide}, got %+v", annotation.See)
+	}
+	// Success carries explicit per-response produce content types.
+	expectedSuccess := openapi.SuccessResponse{
+		StatusCode:  200,
+		DataType:    "TestResponse",
+		Description: "Success desc",
+		Produce:     []string{"application/json"},
+	}
+	if annotation.Success == nil || !reflect.DeepEqual(*annotation.Success, expectedSuccess) {
+		t.Errorf("expected success %+v, got %+v", expectedSuccess, annotation.Success)
 	}
 
 	if l := len(annotation.Failures); l != 1 {
 		t.Fatalf("expected one failure got %d", l)
 	}
 
+	// Failure omits @Produce, so Produce stays empty (builder applies the default).
 	expectedFailure := openapi.ErrorResponse{
 		StatusCode:  400,
-		Marker:      "{object}",
 		Type:        "TestErrorResponse",
 		Description: "Bad request",
 	}
 
-	if got := annotation.Failures[0]; got != expectedFailure {
+	if got := annotation.Failures[0]; !reflect.DeepEqual(got, expectedFailure) {
 		t.Errorf("expected failure %+v, got %+v", expectedFailure, got)
 	}
 }

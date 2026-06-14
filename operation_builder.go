@@ -43,6 +43,21 @@ func (g *Generator) buildOperation(
 		op.Description = annotations.Description
 		op.Tags = append(op.Tags, annotations.Tags...)
 
+		if annotations.See != nil {
+			op.ExternalDocs = &ExternalDocumentation{
+				URL:         annotations.See.URL,
+				Description: annotations.See.Description,
+			}
+		}
+
+		for _, sec := range annotations.Security {
+			scopes := sec.Scopes
+			if scopes == nil {
+				scopes = []string{}
+			}
+			op.Security = append(op.Security, SecurityRequirement{sec.Scheme: scopes})
+		}
+
 		for _, param := range annotations.Parameters {
 			if param.In == "body" {
 				continue
@@ -85,11 +100,7 @@ func (g *Generator) buildResponses(annotations *Annotation) map[string]Response 
 
 		responses[statusCode] = Response{
 			Description: annotations.Success.Description,
-			Content: map[string]MediaTypeObject{
-				"application/json": {
-					Schema: schema,
-				},
-			},
+			Content:     contentMap(annotations.Success.Produce, "application/json", schema),
 		}
 	} else {
 		responses["200"] = Response{
@@ -103,19 +114,29 @@ func (g *Generator) buildResponses(annotations *Annotation) map[string]Response 
 	if annotations != nil {
 		for _, failure := range annotations.Failures {
 			statusCode := strconv.Itoa(failure.StatusCode)
+			schema := &Schema{Ref: fmt.Sprintf("#/components/schemas/%s", failure.Type)}
 			responses[statusCode] = Response{
 				Description: failure.Description,
-				Content: map[string]MediaTypeObject{
-					"application/problem+json": {
-						Schema: &Schema{Ref: fmt.Sprintf("#/components/schemas/%s", failure.Type)},
-					},
-				},
+				Content:     contentMap(failure.Produce, "application/problem+json", schema),
 			}
 		}
 	}
 
 	slog.Debug("[openapi] buildResponses: completed", "response_count", len(responses))
 	return responses
+}
+
+// contentMap builds a content map keyed by the given media types, all sharing
+// schema. When contentTypes is empty, defaultType is used as the single key.
+func contentMap(contentTypes []string, defaultType string, schema *Schema) map[string]MediaTypeObject {
+	if len(contentTypes) == 0 {
+		contentTypes = []string{defaultType}
+	}
+	content := make(map[string]MediaTypeObject, len(contentTypes))
+	for _, ct := range contentTypes {
+		content[ct] = MediaTypeObject{Schema: schema}
+	}
+	return content
 }
 
 // buildRequestBody constructs a request body definition.
@@ -125,6 +146,9 @@ func (g *Generator) buildRequestBody(annotations *Annotation) *RequestBody {
 	var (
 		schema      *Schema
 		description = "Request body"
+		// Required defaults to true; a pointer-typed body parameter marks the
+		// body as optional.
+		required = true
 	)
 
 	if annotations != nil {
@@ -134,7 +158,14 @@ func (g *Generator) buildRequestBody(annotations *Annotation) *RequestBody {
 			}
 			slog.Debug("[openapi] buildRequestBody: found body parameter", "type", param.Type)
 
-			schema = g.schemaGen.GenerateSchema(param.Type)
+			// A pointer data type (e.g. "*CreateRequest") denotes an optional body.
+			dataType := param.Type
+			if strings.HasPrefix(dataType, "*") {
+				required = false
+				dataType = strings.TrimPrefix(dataType, "*")
+			}
+
+			schema = g.schemaGen.GenerateSchema(dataType)
 			if param.Description != "" {
 				description = param.Description
 			}
@@ -147,12 +178,16 @@ func (g *Generator) buildRequestBody(annotations *Annotation) *RequestBody {
 		schema = &Schema{Type: "object"}
 	}
 
+	// Derive the accepted content types from @Accept, defaulting to JSON.
+	var accept []string
+	if annotations != nil {
+		accept = annotations.Accept
+	}
+
 	return &RequestBody{
 		Description: description,
-		Required:    true,
-		Content: map[string]MediaTypeObject{
-			"application/json": {Schema: schema},
-		},
+		Required:    required,
+		Content:     contentMap(accept, "application/json", schema),
 	}
 }
 

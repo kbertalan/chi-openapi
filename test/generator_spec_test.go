@@ -16,7 +16,10 @@ func TestGenerateSpecRoutes(t *testing.T) {
 	r.Get("/foo/{id}", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	cfg := openapi.Config{Title: "Test Service", Version: "1.2.3"}
 	g := openapi.NewGenerator()
-	spec := g.GenerateSpec(r, cfg)
+	spec, err := g.GenerateSpec(r, cfg)
+	if err != nil {
+		t.Fatalf("GenerateSpec error: %v", err)
+	}
 
 	// Check Info
 	if spec.Info.Title != cfg.Title {
@@ -60,7 +63,10 @@ func TestGenerateSpec_Compliance31(t *testing.T) {
 		},
 	}
 	g := openapi.NewGenerator()
-	spec := g.GenerateSpec(r, cfg)
+	spec, err := g.GenerateSpec(r, cfg)
+	if err != nil {
+		t.Fatalf("GenerateSpec error: %v", err)
+	}
 
 	if spec.OpenAPI != "3.1.0" {
 		t.Errorf("expected OpenAPI 3.1.0, got %s", spec.OpenAPI)
@@ -85,8 +91,8 @@ type invoicesHandler struct{}
 // @Description Create a new invoice for the tenant
 // @Tags invoices
 // @Param id path int true "Invoice ID"
-// @Success 201 {object} CreateInvoiceResponse "created"
-// @Failure 400 {object} InvalidRequest "invalid invoice creation request"
+// @Success 201 CreateInvoiceResponse "created"
+// @Failure 400 InvalidRequest "invalid invoice creation request"
 func (h *invoicesHandler) create(w http.ResponseWriter, r *http.Request) {}
 
 func TestGenerateSpecRoutes_MethodReceiver(t *testing.T) {
@@ -97,7 +103,10 @@ func TestGenerateSpecRoutes_MethodReceiver(t *testing.T) {
 
 	cfg := openapi.Config{Title: "Test Service", Version: "1.2.3"}
 	g := openapi.NewGenerator()
-	spec := g.GenerateSpec(r, cfg)
+	spec, err := g.GenerateSpec(r, cfg)
+	if err != nil {
+		t.Fatalf("GenerateSpec error: %v", err)
+	}
 
 	// ensure path exists
 	if _, ok := spec.Paths["/invoices/{id}"]; !ok {
@@ -177,7 +186,10 @@ func TestGenerateSpecRoutes_TopLevelFunction(t *testing.T) {
 
 	cfg := openapi.Config{Title: "Test Service", Version: "1.2.3"}
 	g := openapi.NewGenerator()
-	spec := g.GenerateSpec(r, cfg)
+	spec, err := g.GenerateSpec(r, cfg)
+	if err != nil {
+		t.Fatalf("GenerateSpec error: %v", err)
+	}
 
 	ops, ok := spec.Paths["/widgets"]
 	if !ok {
@@ -214,7 +226,10 @@ func TestGenerateSpecRoutes_GenericReceiver(t *testing.T) {
 
 	cfg := openapi.Config{Title: "Test Service", Version: "1.2.3"}
 	g := openapi.NewGenerator()
-	spec := g.GenerateSpec(r, cfg)
+	spec, err := g.GenerateSpec(r, cfg)
+	if err != nil {
+		t.Fatalf("GenerateSpec error: %v", err)
+	}
 
 	ops, ok := spec.Paths["/repo/widgets"]
 	if !ok {
@@ -245,7 +260,10 @@ func TestGenerateSpec_MenuCouponCollision(t *testing.T) {
 
 	cfg := openapi.Config{Title: "Test API", Version: "1.0.0"}
 	g := openapi.NewGenerator()
-	spec := g.GenerateSpec(r, cfg)
+	spec, err := g.GenerateSpec(r, cfg)
+	if err != nil {
+		t.Fatalf("GenerateSpec error: %v", err)
+	}
 
 	// Check that both paths exist
 	paths := spec.Paths
@@ -337,7 +355,10 @@ func TestGenerateSpec_ModelRenaming(t *testing.T) {
 	g.GenerateSchema("openapi_test.RenameTarget")
 	g.GenerateSchema("openapi_test.NestedTarget")
 
-	spec := g.GenerateSpec(r, cfg)
+	spec, err := g.GenerateSpec(r, cfg)
+	if err != nil {
+		t.Fatalf("GenerateSpec error: %v", err)
+	}
 
 	// openapi_test.RenameTarget should be renamed to Target (pkg=openapi_test, name=RenameTarget)
 	if _, ok := spec.Components.Schemas["Target"]; !ok {
@@ -380,7 +401,10 @@ func TestGenerateSpec_ConflictResolution(t *testing.T) {
 	g.GenerateSchema("Alpha")
 	g.GenerateSchema("Beta")
 
-	spec := g.GenerateSpec(chi.NewRouter(), cfg)
+	spec, err := g.GenerateSpec(chi.NewRouter(), cfg)
+	if err != nil {
+		t.Fatalf("GenerateSpec error: %v", err)
+	}
 
 	// One should be ConflictModel, the other ConflictModel2
 	if _, ok := spec.Components.Schemas["ConflictModel"]; !ok {
@@ -396,5 +420,70 @@ func TestGenerateSpec_ConflictResolution(t *testing.T) {
 			keys = append(keys, k)
 		}
 		t.Errorf("expected 'ConflictModel2', but got keys: %v", keys)
+	}
+}
+
+// securedHandler carries a @Security annotation referencing a named scheme.
+// @Summary Secured endpoint
+// @Security ApiKeyAuth
+// @Success 200 SecuredResponse "ok"
+func securedHandler(w http.ResponseWriter, r *http.Request) {}
+
+type SecuredResponse struct {
+	OK bool `json:"ok"`
+}
+
+// TestGenerateSpec_SecurityUndeclaredFails verifies that a @Security scheme not
+// declared in Config.SecuritySchemes causes GenerateSpec to fail.
+func TestGenerateSpec_SecurityUndeclaredFails(t *testing.T) {
+	r := chi.NewRouter()
+	r.Get("/secured", securedHandler)
+
+	cfg := openapi.Config{Title: "Test", Version: "1.0.0"}
+	g := openapi.NewGenerator()
+
+	_, err := g.GenerateSpec(r, cfg)
+	if err == nil {
+		t.Fatal("expected error for undeclared security scheme, got nil")
+	}
+	if !strings.Contains(err.Error(), "ApiKeyAuth") {
+		t.Errorf("expected error to mention 'ApiKeyAuth', got %v", err)
+	}
+}
+
+// TestGenerateSpec_SecurityDeclaredSucceeds verifies that declaring the scheme in
+// Config.SecuritySchemes makes generation succeed and wires the operation and
+// components together.
+func TestGenerateSpec_SecurityDeclaredSucceeds(t *testing.T) {
+	r := chi.NewRouter()
+	r.Get("/secured", securedHandler)
+
+	cfg := openapi.Config{
+		Title:   "Test",
+		Version: "1.0.0",
+		SecuritySchemes: map[string]openapi.SecurityScheme{
+			"ApiKeyAuth": {Type: "apiKey"},
+		},
+	}
+	g := openapi.NewGenerator()
+
+	spec, err := g.GenerateSpec(r, cfg)
+	if err != nil {
+		t.Fatalf("GenerateSpec error: %v", err)
+	}
+
+	if _, ok := spec.Components.SecuritySchemes["ApiKeyAuth"]; !ok {
+		t.Errorf("expected ApiKeyAuth in components.securitySchemes, got %+v", spec.Components.SecuritySchemes)
+	}
+
+	op := spec.Paths["/secured"].Get
+	if op == nil {
+		t.Fatal("expected GET /secured operation")
+	}
+	if len(op.Security) != 1 {
+		t.Fatalf("expected 1 security requirement, got %+v", op.Security)
+	}
+	if _, ok := op.Security[0]["ApiKeyAuth"]; !ok {
+		t.Errorf("expected operation security requirement ApiKeyAuth, got %+v", op.Security[0])
 	}
 }
