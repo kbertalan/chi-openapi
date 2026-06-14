@@ -63,6 +63,7 @@ func TestParseAnnotations_AllAnnotations(t *testing.T) {
 
 	expectedFailure := openapi.ErrorResponse{
 		StatusCode:  400,
+		Marker:      "{object}",
 		Type:        "TestErrorResponse",
 		Description: "Bad request",
 	}

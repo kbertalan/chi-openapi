@@ -7,8 +7,9 @@ import (
 	"go/token"
 	"log/slog"
 	"path/filepath"
-	"strconv"
 	"strings"
+
+	"github.com/kbertalan/chi-openapi/serde"
 )
 
 // Annotation represents parsed swagger annotations
@@ -19,16 +20,22 @@ type Annotation struct {
 	Accept      []string
 	Produce     []string
 	Security    []string
-	Parameters  []ParamAnnotation
-	Success     *SuccessResponse
-	Failures    []ErrorResponse
+	Parameters  []ParamAnnotation `tag:"Param"`
+	Success     *SuccessResponse  `tag:"Success"`
+	Failures    []ErrorResponse   `tag:"Failure"`
 }
 
 type SuccessResponse struct {
 	StatusCode  int
+	Marker      string
 	DataType    string
 	Description string
-	IsWrapped   bool // true if {data} marker was used
+}
+
+// IsWrapped reports whether the {data} marker was used (rather than {object}),
+// indicating the response payload is wrapped in a data envelope.
+func (r SuccessResponse) IsWrapped() bool {
+	return r.Marker == "{data}"
 }
 
 type ParamAnnotation struct {
@@ -41,18 +48,15 @@ type ParamAnnotation struct {
 
 type ErrorResponse struct {
 	StatusCode  int
+	Marker      string
 	Type        string
 	Description string
 }
 
-// AnnotationParsingError represents errors encountered while parsing annotation lines.
-// It contains one or more error messages for malformed annotation directives.
-type AnnotationParsingError struct {
-	Messages []string
-}
-
-func (e *AnnotationParsingError) Error() string {
-	return "annotation parsing errors: " + strings.Join(e.Messages, "; ")
+// IsWrapped reports whether the {data} marker was used (rather than {object}),
+// indicating the response payload is wrapped in a data envelope.
+func (r ErrorResponse) IsWrapped() bool {
+	return r.Marker == "{data}"
 }
 
 // ParseAnnotations reads the AST for the provided Go source file (or the
@@ -231,193 +235,20 @@ func ParseAnnotations(filePath, functionName string) (*Annotation, error) {
 
 	annotation, err := parseAnnotationComment(comment)
 	if err != nil {
-		slog.Warn("[openapi] ParseAnnotations: parsing errors", "error", err)
+		return nil, fmt.Errorf("[openapi] ParseAnnotations: %w", err)
 	}
 
 	return annotation, nil
 }
 
-// parseAnnotationComment analyses a block of comment text and builds an
-// Annotation structure by scanning for known tokens such as @Summary,
-// @Param, @Success, and @Failure. It accumulates parsing errors and
-// returns them as an AnnotationParsingError when malformed lines are
-// encountered.
+// parseAnnotationComment decodes a doc-comment annotation block into an
+// Annotation using the serde DSL decoder. A bare @Accept/@Produce/@Security
+// (with no value) is reported as an error by the decoder.
 func parseAnnotationComment(comment string) (*Annotation, error) {
-	var errs []string
 	annotation := &Annotation{}
-	lines := strings.Split(comment, "\n")
-
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
-		}
-
-		switch {
-		case strings.HasPrefix(line, "@Summary "):
-			annotation.Summary = strings.TrimPrefix(line, "@Summary ")
-		case strings.HasPrefix(line, "@Description "):
-			annotation.Description = strings.TrimPrefix(line, "@Description ")
-		case strings.HasPrefix(line, "@Tags "):
-			tags := strings.TrimPrefix(line, "@Tags ")
-			annotation.Tags = strings.Split(tags, ",")
-			for i := range annotation.Tags {
-				annotation.Tags[i] = strings.TrimSpace(annotation.Tags[i])
-			}
-
-		case strings.HasPrefix(line, "@Accept"):
-			accept := strings.TrimSpace(strings.TrimPrefix(line, "@Accept"))
-			if accept == "" {
-				accept = "application/json"
-			}
-			annotation.Accept = append(annotation.Accept, accept)
-
-		case strings.HasPrefix(line, "@Produce"):
-			produce := strings.TrimSpace(strings.TrimPrefix(line, "@Produce"))
-			if produce == "" {
-				produce = "application/json"
-			}
-			annotation.Produce = append(annotation.Produce, produce)
-
-		case strings.HasPrefix(line, "@Security"):
-			security := strings.TrimSpace(strings.TrimPrefix(line, "@Security"))
-			annotation.Security = append(annotation.Security, security)
-
-		case strings.HasPrefix(line, "@Param "):
-			param, err := parseParamAnnotation(line)
-			if err != nil {
-				errs = append(errs, err.Error())
-			} else {
-				annotation.Parameters = append(annotation.Parameters, *param)
-			}
-
-		case strings.HasPrefix(line, "@Success "):
-			succ, err := parseSuccessAnnotation(line)
-			if err != nil {
-				errs = append(errs, err.Error())
-			} else {
-				annotation.Success = succ
-			}
-
-		case strings.HasPrefix(line, "@Failure "):
-			fail, err := parseFailureAnnotation(line)
-			if err != nil {
-				errs = append(errs, err.Error())
-			} else {
-				annotation.Failures = append(annotation.Failures, *fail)
-			}
-		}
+	if err := serde.Unmarshal(comment, annotation); err != nil {
+		return nil, err
 	}
 
-	if len(errs) > 0 {
-		return annotation, &AnnotationParsingError{Messages: errs}
-	}
 	return annotation, nil
-}
-
-// parseSuccessAnnotation parses a single @Success annotation line and
-// converts it into a SuccessResponse containing status code, data type
-// and an optional quoted description.
-func parseSuccessAnnotation(line string) (*SuccessResponse, error) {
-	slog.Debug("[openapi] parseSuccessAnnotation: called", "line", line)
-	// @Success 200 {data} Type "Description"
-	content := strings.TrimPrefix(line, "@Success ")
-	parts := strings.Fields(content)
-	if len(parts) < 2 {
-		return nil, fmt.Errorf("invalid @Success annotation: %s", line)
-	}
-
-	statusCode, err := strconv.Atoi(parts[0])
-	if err != nil {
-		return nil, err
-	}
-
-	response := &SuccessResponse{StatusCode: statusCode}
-	remaining := strings.Join(parts[1:], " ")
-
-	// Extract type from {data} Type or {object} Type
-	if strings.Contains(remaining, "{data}") || strings.Contains(remaining, "{object}") {
-		if strings.Contains(remaining, "{data}") {
-			response.IsWrapped = true
-		}
-		remaining = strings.Replace(remaining, "{data}", "", 1)
-		remaining = strings.Replace(remaining, "{object}", "", 1)
-		remaining = strings.TrimSpace(remaining)
-
-		parts := strings.Fields(remaining)
-		if len(parts) > 0 {
-			response.DataType = parts[0]
-		}
-	}
-
-	// Extract description from quotes
-	if start := strings.Index(remaining, "\""); start != -1 {
-		if end := strings.LastIndex(remaining, "\""); end != -1 && end > start {
-			response.Description = remaining[start+1 : end]
-		}
-	}
-
-	return response, nil
-}
-
-// parseParamAnnotation parses a single @Param line into a ParamAnnotation
-// structure. Expected format is: @Param <name> <in> <type> <required> "desc"
-func parseParamAnnotation(line string) (*ParamAnnotation, error) {
-	slog.Debug("[openapi] parseParamAnnotation: called", "line", line)
-	// @Param name in type required "description"
-	content := strings.TrimPrefix(line, "@Param ")
-	parts := strings.Fields(content)
-	if len(parts) < 4 {
-		return nil, fmt.Errorf("invalid @Param annotation: %s", line)
-	}
-
-	param := &ParamAnnotation{
-		Name:     parts[0],
-		In:       parts[1],
-		Type:     parts[2],
-		Required: parts[3] == "true",
-	}
-
-	// Extract description
-	if start := strings.Index(content, "\""); start != -1 {
-		if end := strings.LastIndex(content, "\""); end != -1 && end > start {
-			param.Description = content[start+1 : end]
-		}
-	}
-
-	return param, nil
-}
-
-// parseFailureAnnotation parses @Failure lines into an ErrorResponse. It
-// extracts the numeric status code and optional quoted description.
-func parseFailureAnnotation(line string) (*ErrorResponse, error) {
-	slog.Debug("[openapi] parseFailureAnnotation: called", "line", line)
-	// @Failure 400 {object} Type "Description"
-	content := strings.TrimPrefix(line, "@Failure ")
-	parts := strings.Fields(content)
-	if len(parts) < 3 {
-		return nil, fmt.Errorf("invalid @Failure annotation: %s", line)
-	}
-
-	statusCode, err := strconv.Atoi(parts[0])
-	if err != nil {
-		return nil, err
-	}
-
-	dataType := parts[2]
-
-	failure := &ErrorResponse{
-		StatusCode: statusCode,
-		Type:       dataType,
-	}
-
-	remaining := strings.Join(parts[3:], " ")
-	// Extract description
-	if start := strings.Index(remaining, "\""); start != -1 {
-		if end := strings.LastIndex(remaining, "\""); end != -1 && end > start {
-			failure.Description = remaining[start+1 : end]
-		}
-	}
-
-	return failure, nil
 }
