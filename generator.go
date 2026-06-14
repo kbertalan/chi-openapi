@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"maps"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -67,25 +68,17 @@ func (g *Generator) GenerateSchema(typeName string) *Schema {
 // that is not declared in cfg.SecuritySchemes; the (partially built) spec is
 // still returned alongside the error for inspection.
 func (g *Generator) GenerateSpec(router chi.Router, cfg Config) (Spec, error) {
-	if cfg.Title == "" || cfg.Version == "" {
-		slog.Warn("[openapi] GenerateSpec: missing required config", "title", cfg.Title, "version", cfg.Version)
+	if cfg.Info.Title == "" || cfg.Info.Version == "" {
+		slog.Warn("[openapi] GenerateSpec: missing required config", "title", cfg.Info.Title, "version", cfg.Info.Version)
 	}
 
-	slog.Debug("[openapi] GenerateSpec: called", "title", cfg.Title, "version", cfg.Version)
+	slog.Debug("[openapi] GenerateSpec: called", "title", cfg.Info.Title, "version", cfg.Info.Version)
 
 	spec := Spec{
 		OpenAPI:           "3.1.0",
 		JSONSchemaDialect: "https://spec.openapis.org/oas/3.1/dialect/base",
-		Info: Info{
-			Title:          cfg.Title,
-			Summary:        cfg.Summary,
-			Version:        cfg.Version,
-			Description:    cfg.Description,
-			TermsOfService: cfg.TermsOfService,
-			Contact:        cfg.Contact,
-			License:        cfg.License,
-		},
-		Paths: make(map[string]PathItem),
+		Info:              cfg.Info,
+		Paths:             make(map[string]PathItem),
 		Components: &Components{
 			Schemas:         make(map[string]Schema),
 			SecuritySchemes: make(map[string]SecurityScheme),
@@ -102,10 +95,7 @@ func (g *Generator) GenerateSpec(router chi.Router, cfg Config) (Spec, error) {
 
 	if len(cfg.Servers) > 0 {
 		slog.Debug("[openapi] GenerateSpec: adding servers", "count", len(cfg.Servers))
-		spec.Servers = make([]Server, len(cfg.Servers))
-		for i, s := range cfg.Servers {
-			spec.Servers[i] = Server{URL: s, Description: "API Server"}
-		}
+		spec.Servers = slices.Clone(cfg.Servers)
 	}
 
 	// Register the security schemes declared in config. Every @Security name

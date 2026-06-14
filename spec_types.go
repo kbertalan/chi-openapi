@@ -1,16 +1,10 @@
 package openapi
 
 // Config defines the configuration for OpenAPI specification generation.
-// All fields except Title and Version are optional.
+// Info.Title and Info.Version are required; all other fields are optional.
 type Config struct {
-	Title           string                    // Required: API title
-	Summary         string                    // Optional: API summary
-	Description     string                    // Optional: API description
-	Version         string                    // Required: API version (e.g., "1.0.0")
-	TermsOfService  string                    // Optional: Terms of service URL
-	Servers         []string                  // Optional: List of base server URLs
-	Contact         *Contact                  // Optional: Contact information
-	License         *License                  // Optional: License information
+	Info            Info                      // Required: API metadata (Title and Version are mandatory)
+	Servers         []Server                  // Optional: List of API servers
 	SecuritySchemes map[string]SecurityScheme // Optional: security scheme definitions
 }
 

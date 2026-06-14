@@ -14,7 +14,7 @@ import (
 func TestGenerateSpecRoutes(t *testing.T) {
 	r := chi.NewRouter()
 	r.Get("/foo/{id}", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
-	cfg := openapi.Config{Title: "Test Service", Version: "1.2.3"}
+	cfg := openapi.Config{Info: openapi.Info{Title: "Test Service", Version: "1.2.3"}}
 	g := openapi.NewGenerator()
 	spec, err := g.GenerateSpec(r, cfg)
 	if err != nil {
@@ -22,11 +22,8 @@ func TestGenerateSpecRoutes(t *testing.T) {
 	}
 
 	// Check Info
-	if spec.Info.Title != cfg.Title {
-		t.Errorf("expected Info.Title %q, got %q", cfg.Title, spec.Info.Title)
-	}
-	if spec.Info.Version != cfg.Version {
-		t.Errorf("expected Info.Version %q, got %q", cfg.Version, spec.Info.Version)
+	if spec.Info != cfg.Info {
+		t.Errorf("expected Info %+v, got %+v", cfg.Info, spec.Info)
 	}
 
 	// Check path presence and operation
@@ -53,13 +50,15 @@ func TestGenerateSpecRoutes(t *testing.T) {
 func TestGenerateSpec_Compliance31(t *testing.T) {
 	r := chi.NewRouter()
 	cfg := openapi.Config{
-		Title:       "Compliance Test",
-		Summary:     "Test Summary",
-		Version:     "3.1.0",
-		Description: "Testing 3.1 features",
-		License: &openapi.License{
-			Name:       "Apache 2.0",
-			Identifier: "Apache-2.0",
+		Info: openapi.Info{
+			Title:       "Compliance Test",
+			Summary:     "Test Summary",
+			Version:     "3.1.0",
+			Description: "Testing 3.1 features",
+			License: &openapi.License{
+				Name:       "Apache 2.0",
+				Identifier: "Apache-2.0",
+			},
 		},
 	}
 	g := openapi.NewGenerator()
@@ -72,12 +71,8 @@ func TestGenerateSpec_Compliance31(t *testing.T) {
 		t.Errorf("expected OpenAPI 3.1.0, got %s", spec.OpenAPI)
 	}
 
-	if spec.Info.Summary != "Test Summary" {
-		t.Errorf("expected info summary Test Summary, got %s", spec.Info.Summary)
-	}
-
-	if spec.Info.License.Identifier != "Apache-2.0" {
-		t.Errorf("expected license identifier Apache-2.0, got %s", spec.Info.License.Identifier)
+	if spec.Info != cfg.Info {
+		t.Errorf("expected info %+v, got %+v", cfg.Info, spec.Info)
 	}
 }
 
@@ -101,7 +96,7 @@ func TestGenerateSpecRoutes_MethodReceiver(t *testing.T) {
 	// register method value as handler
 	r.Post("/invoices/{id}", http.HandlerFunc(h.create))
 
-	cfg := openapi.Config{Title: "Test Service", Version: "1.2.3"}
+	cfg := openapi.Config{Info: openapi.Info{Title: "Test Service", Version: "1.2.3"}}
 	g := openapi.NewGenerator()
 	spec, err := g.GenerateSpec(r, cfg)
 	if err != nil {
@@ -184,7 +179,7 @@ func TestGenerateSpecRoutes_TopLevelFunction(t *testing.T) {
 	r := chi.NewRouter()
 	r.Get("/widgets", listWidgets)
 
-	cfg := openapi.Config{Title: "Test Service", Version: "1.2.3"}
+	cfg := openapi.Config{Info: openapi.Info{Title: "Test Service", Version: "1.2.3"}}
 	g := openapi.NewGenerator()
 	spec, err := g.GenerateSpec(r, cfg)
 	if err != nil {
@@ -224,7 +219,7 @@ func TestGenerateSpecRoutes_GenericReceiver(t *testing.T) {
 	repo := &widgetRepo[int, float64]{}
 	r.Get("/repo/widgets", repo.List)
 
-	cfg := openapi.Config{Title: "Test Service", Version: "1.2.3"}
+	cfg := openapi.Config{Info: openapi.Info{Title: "Test Service", Version: "1.2.3"}}
 	g := openapi.NewGenerator()
 	spec, err := g.GenerateSpec(r, cfg)
 	if err != nil {
@@ -258,7 +253,7 @@ func TestGenerateSpec_MenuCouponCollision(t *testing.T) {
 	r.Get("/api/v1/menu/", menuHandler)
 	r.Get("/api/v1/coupon/", couponHandler)
 
-	cfg := openapi.Config{Title: "Test API", Version: "1.0.0"}
+	cfg := openapi.Config{Info: openapi.Info{Title: "Test API", Version: "1.0.0"}}
 	g := openapi.NewGenerator()
 	spec, err := g.GenerateSpec(r, cfg)
 	if err != nil {
@@ -347,7 +342,7 @@ func TestGenerateSpec_ModelRenaming(t *testing.T) {
 		return name
 	}
 
-	cfg := openapi.Config{Title: "Renaming Test", Version: "1.0.0"}
+	cfg := openapi.Config{Info: openapi.Info{Title: "Renaming Test", Version: "1.0.0"}}
 	g := openapi.NewGenerator()
 	g.SetModelNameFunc(customStrategy)
 
@@ -389,7 +384,7 @@ func TestGenerateSpec_ModelRenaming(t *testing.T) {
 }
 
 func TestGenerateSpec_ConflictResolution(t *testing.T) {
-	cfg := openapi.Config{Title: "Conflict Test", Version: "1.0.0"}
+	cfg := openapi.Config{Info: openapi.Info{Title: "Conflict Test", Version: "1.0.0"}}
 	g := openapi.NewGenerator()
 
 	// Strategy that forces everything to the same name
@@ -439,7 +434,7 @@ func TestGenerateSpec_SecurityUndeclaredFails(t *testing.T) {
 	r := chi.NewRouter()
 	r.Get("/secured", securedHandler)
 
-	cfg := openapi.Config{Title: "Test", Version: "1.0.0"}
+	cfg := openapi.Config{Info: openapi.Info{Title: "Test", Version: "1.0.0"}}
 	g := openapi.NewGenerator()
 
 	_, err := g.GenerateSpec(r, cfg)
@@ -459,8 +454,7 @@ func TestGenerateSpec_SecurityDeclaredSucceeds(t *testing.T) {
 	r.Get("/secured", securedHandler)
 
 	cfg := openapi.Config{
-		Title:   "Test",
-		Version: "1.0.0",
+		Info: openapi.Info{Title: "Test", Version: "1.0.0"},
 		SecuritySchemes: map[string]openapi.SecurityScheme{
 			"ApiKeyAuth": {Type: "apiKey"},
 		},
