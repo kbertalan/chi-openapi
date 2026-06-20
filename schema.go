@@ -87,9 +87,9 @@ func (sg *SchemaGenerator) generateSchema(typeName string, ctx genCtx) *Schema {
 	qualifiedName := sg.getQualifiedTypeName(typeName, ctx)
 	slog.Debug("[openapi] GenerateSchema: type name conversion", "typeName", typeName, "qualifiedName", qualifiedName)
 
-	// 4) Check external known types
-	if schema, ok := sg.typeIndex.lookupExternalKnownType(qualifiedName); ok {
-		slog.Debug("[openapi] GenerateSchema: using externalKnownTypes", "qualifiedName", qualifiedName)
+	// 4) Check the schema cache (seeded external types + previously generated types)
+	if schema, ok := sg.typeIndex.lookupSchemaCache(qualifiedName); ok {
+		slog.Debug("[openapi] GenerateSchema: using schemaCache", "qualifiedName", qualifiedName)
 		// Store in sg.schemas so it can be post-processed (renamed) if needed,
 		// but only if it's not a reference itself.
 		sg.mutex.Lock()
@@ -169,7 +169,7 @@ func (sg *SchemaGenerator) generateSchema(typeName string, ctx genCtx) *Schema {
 	slog.Debug("[openapi] GenerateSchema: storing schema", "qualifiedName", qualifiedName, "originalTypeName", typeName)
 	sg.schemas[qualifiedName] = built
 	sg.mutex.Unlock()
-	sg.typeIndex.storeExternalKnownType(qualifiedName, &Schema{
+	sg.typeIndex.storeSchemaCache(qualifiedName, &Schema{
 		Ref: fmt.Sprintf("#/components/schemas/%s", qualifiedName),
 	})
 

@@ -40,12 +40,12 @@ func ensureTypeIndex() {
 	typeIndexOnce.Do(func() {
 		// load module path for package classification
 		loadModulePath()
-		slog.Debug("[openapi] cache.go: initializing typeIndex and externalKnownTypes")
+		slog.Debug("[openapi] cache.go: initializing typeIndex and schemaCache")
 		// Build type index once at startup
 		typeIndex = BuildTypeIndex()
 
-		slog.Debug("[openapi] cache.go: typeIndex built, setting externalKnownTypes")
-		typeIndex.externalKnownTypes = defaultExternalKnownTypes()
+		slog.Debug("[openapi] cache.go: typeIndex built, setting schemaCache")
+		typeIndex.schemaCache = defaultSchemaCache()
 		// Log the number of types and files indexed
 		slog.Debug(
 			"[openapi] cache.go: typeIndex initialized",
@@ -58,55 +58,49 @@ func ensureTypeIndex() {
 }
 
 // TypeIndex provides fast lookup of type definitions by package and type name.
-//
-// The types, files, qualifiedTypes and packageImports maps are populated once
-// during BuildTypeIndex and are read-only afterwards, so they need no locking
-// during schema generation. externalKnownTypes, by contrast, is written while
-// schemas are generated (and a single TypeIndex may be shared by several
-// SchemaGenerators), so all of its accesses are guarded by externalMu.
+// All maps except schemaCache are built once and read-only afterwards;
+// schemaCache is written during generation, so it is guarded by schemaCacheMu.
 type TypeIndex struct {
-	types              map[string]map[string]*ast.TypeSpec // package -> type -> spec
-	files              map[string]*ast.File                // file path -> parsed file
-	qualifiedTypes     map[string]*ast.TypeSpec            // qualified type name -> spec (e.g., "order.CreateReq")
-	packageImports     map[string]string                   // import path -> package name (e.g., "github.com/user/sqlc" -> "sqlc")
-	externalMu         sync.RWMutex                        // guards externalKnownTypes
-	externalKnownTypes map[string]*Schema                  // external known types
+	types          map[string]map[string]*ast.TypeSpec // package -> type -> spec
+	files          map[string]*ast.File                // file path -> parsed file
+	qualifiedTypes map[string]*ast.TypeSpec            // qualified type name -> spec (e.g., "order.CreateReq")
+	packageImports map[string]string                   // import path -> package name (e.g., "github.com/user/sqlc" -> "sqlc")
+	schemaCacheMu  sync.RWMutex                         // guards schemaCache
+	schemaCache    map[string]*Schema                  // qualified type name -> schema (seeded external types + generated $refs)
 }
 
-// lookupExternalKnownType returns the schema registered for a qualified type
-// name, if any. Safe for concurrent use.
-func (idx *TypeIndex) lookupExternalKnownType(name string) (*Schema, bool) {
+// lookupSchemaCache returns the cached schema for a qualified type name, if any.
+func (idx *TypeIndex) lookupSchemaCache(name string) (*Schema, bool) {
 	if idx == nil {
 		return nil, false
 	}
-	idx.externalMu.RLock()
-	defer idx.externalMu.RUnlock()
-	schema, ok := idx.externalKnownTypes[name]
+	idx.schemaCacheMu.RLock()
+	defer idx.schemaCacheMu.RUnlock()
+	schema, ok := idx.schemaCache[name]
 	return schema, ok
 }
 
-// storeExternalKnownType registers a schema for a qualified type name. Safe for
-// concurrent use.
-func (idx *TypeIndex) storeExternalKnownType(name string, schema *Schema) {
+// storeSchemaCache caches a schema for a qualified type name.
+func (idx *TypeIndex) storeSchemaCache(name string, schema *Schema) {
 	if idx == nil {
 		return
 	}
-	idx.externalMu.Lock()
-	defer idx.externalMu.Unlock()
-	if idx.externalKnownTypes == nil {
-		idx.externalKnownTypes = make(map[string]*Schema)
+	idx.schemaCacheMu.Lock()
+	defer idx.schemaCacheMu.Unlock()
+	if idx.schemaCache == nil {
+		idx.schemaCache = make(map[string]*Schema)
 	}
-	idx.externalKnownTypes[name] = schema
+	idx.schemaCache[name] = schema
 }
 
 // BuildTypeIndex scans the given roots and builds a type index for all Go types.
 func BuildTypeIndex() *TypeIndex {
 	idx := &TypeIndex{
-		types:              make(map[string]map[string]*ast.TypeSpec),
-		files:              make(map[string]*ast.File),
-		externalKnownTypes: make(map[string]*Schema),
-		qualifiedTypes:     make(map[string]*ast.TypeSpec),
-		packageImports:     make(map[string]string),
+		types:          make(map[string]map[string]*ast.TypeSpec),
+		files:          make(map[string]*ast.File),
+		schemaCache:    make(map[string]*Schema),
+		qualifiedTypes: make(map[string]*ast.TypeSpec),
+		packageImports: make(map[string]string),
 	}
 
 	// Index every module in scope (a go.work workspace may declare several).
@@ -122,7 +116,7 @@ func BuildTypeIndex() *TypeIndex {
 		idx.indexModule(root)
 	}
 
-	idx.externalKnownTypes = defaultExternalKnownTypes()
+	idx.schemaCache = defaultSchemaCache()
 
 	slog.Debug("[openapi] BuildTypeIndex: completed", "totalPackages", len(idx.types), "totalFiles", len(idx.files))
 	return idx
@@ -153,7 +147,9 @@ func (idx *TypeIndex) indexModule(root string) {
 	})
 }
 
-func defaultExternalKnownTypes() map[string]*Schema {
+// defaultSchemaCache returns hard-coded schemas for well-known external library
+// types (time, uuid, sql, pgtype, ...) that cannot be introspected from source.
+func defaultSchemaCache() map[string]*Schema {
 	return map[string]*Schema{
 		// JSON and raw data types
 		"any":             {Description: "Any type (interface{})"},
@@ -403,13 +399,14 @@ func (idx *TypeIndex) GetQualifiedTypeName(typeName string) string {
 	return typeName
 }
 
+// AddExternalKnownType registers a hard-coded schema for a qualified type name.
 func AddExternalKnownType(name string, schema *Schema) {
 	ensureTypeIndex() // Ensure typeIndex is initialized
 	if typeIndex == nil {
 		slog.Error("[openapi] AddExternalKnownType: typeIndex is nil, cannot add external type", "name", name)
 		return
 	}
-	typeIndex.storeExternalKnownType(name, schema)
+	typeIndex.storeSchemaCache(name, schema)
 	slog.Debug("[openapi] AddExternalKnownType: added external known type", "name", name)
 }
 

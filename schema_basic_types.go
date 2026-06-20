@@ -77,7 +77,7 @@ func (sg *SchemaGenerator) generateBasicTypeSchema(typeName string, ctx genCtx) 
 	if strings.HasPrefix(typeName, "*") {
 		// Try to see if the pointer type is known externally first (e.g. *time.Time)
 		qualified := sg.getQualifiedTypeName(typeName, ctx)
-		if schema, ok := sg.typeIndex.lookupExternalKnownType(qualified); ok {
+		if schema, ok := sg.typeIndex.lookupSchemaCache(qualified); ok {
 			return schema
 		}
 
