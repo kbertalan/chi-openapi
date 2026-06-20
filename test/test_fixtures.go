@@ -88,3 +88,18 @@ type Coupon struct {
 	Type  DiscountType `json:"type"`
 	Scope CouponScope  `json:"scope"`
 }
+
+// CreatedOrder is a @Success response fixture used to verify that a success
+// response type is resolved and registered into components.schemas.
+type CreatedOrder struct {
+	ID    string `json:"id"`
+	Total int    `json:"total"`
+}
+
+// OrderProblem is a @Failure response fixture used to verify that a failure
+// response type is resolved and registered into components.schemas, the same
+// way as a success type.
+type OrderProblem struct {
+	Message string `json:"message"`
+	Code    int    `json:"code"`
+}

@@ -1,7 +1,6 @@
 package openapi
 
 import (
-	"fmt"
 	"log/slog"
 	"net/http"
 	"sort"
@@ -96,7 +95,7 @@ func (g *Generator) buildResponses(annotations *Annotation) map[string]Response 
 	if annotations != nil && annotations.Success != nil {
 		statusCode := strconv.Itoa(annotations.Success.StatusCode)
 
-		schema := g.generateResponseSchema(annotations.Success.DataType)
+		schema := g.schemaGen.GenerateSchema(annotations.Success.DataType)
 
 		responses[statusCode] = Response{
 			Description: annotations.Success.Description,
@@ -114,7 +113,7 @@ func (g *Generator) buildResponses(annotations *Annotation) map[string]Response 
 	if annotations != nil {
 		for _, failure := range annotations.Failures {
 			statusCode := strconv.Itoa(failure.StatusCode)
-			schema := &Schema{Ref: fmt.Sprintf("#/components/schemas/%s", failure.Type)}
+			schema := g.schemaGen.GenerateSchema(failure.Type)
 			responses[statusCode] = Response{
 				Description: failure.Description,
 				Content:     contentMap(failure.Produce, "application/problem+json", schema),
@@ -188,28 +187,6 @@ func (g *Generator) buildRequestBody(annotations *Annotation) *RequestBody {
 		Description: description,
 		Required:    required,
 		Content:     contentMap(accept, "application/json", schema),
-	}
-}
-
-// generateResponseSchema resolves the schema referenced by an annotation.
-func (g *Generator) generateResponseSchema(dataType string) *Schema {
-	slog.Debug("[openapi] generateResponseSchema: called", "dataType", dataType)
-
-	if dataType == "" {
-		return &Schema{Type: "object"}
-	}
-
-	switch {
-	case strings.HasPrefix(dataType, "[]"):
-		itemType := strings.TrimPrefix(dataType, "[]")
-		return &Schema{
-			Type:  "array",
-			Items: g.schemaGen.GenerateSchema(itemType),
-		}
-	case strings.HasPrefix(dataType, "*"):
-		return g.schemaGen.GenerateSchema(strings.TrimPrefix(dataType, "*"))
-	default:
-		return g.schemaGen.GenerateSchema(dataType)
 	}
 }
 

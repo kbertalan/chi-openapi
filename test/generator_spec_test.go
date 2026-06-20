@@ -481,3 +481,87 @@ func TestGenerateSpec_SecurityDeclaredSucceeds(t *testing.T) {
 		t.Errorf("expected operation security requirement ApiKeyAuth, got %+v", op.Security[0])
 	}
 }
+
+// createOrder references defined response structs (CreatedOrder, OrderProblem)
+// from both @Success and @Failure. It guards that both response types are not
+// only referenced by the operation but also resolved and registered into
+// components.schemas.
+//
+// @Summary Create order
+// @Success 201 CreatedOrder "created"
+// @Failure 400 OrderProblem "bad request"
+func createOrder(w http.ResponseWriter, r *http.Request) {}
+
+func TestGenerateSpec_ResponseTypesRegistered(t *testing.T) {
+	r := chi.NewRouter()
+	r.Post("/orders", createOrder)
+
+	cfg := openapi.Config{Info: openapi.Info{Title: "Orders", Version: "1.0.0"}}
+	g := NewTestGenerator()
+	spec, err := g.GenerateSpec(r, cfg)
+	AssertNoError(t, err)
+
+	op := spec.Paths["/orders"].Post
+	if op == nil {
+		t.Fatal("expected POST /orders operation")
+	}
+
+	// The fixtures live in package "openapi", so the default naming strategy
+	// keys them under their qualified names.
+	const (
+		successKey = "openapi.CreatedOrder"
+		failureKey = "openapi.OrderProblem"
+	)
+
+	// 1. @Success: the response must reference the schema...
+	successResp, ok := op.Responses["201"]
+	if !ok {
+		t.Fatalf("expected 201 response, got %+v", op.Responses)
+	}
+	AssertEqual(t, "#/components/schemas/"+successKey, successResp.Content["application/json"].Schema.Ref)
+
+	// ...and the schema must be registered as a real object, not a placeholder.
+	successSchema, ok := spec.Components.Schemas[successKey]
+	if !ok {
+		t.Fatalf("expected %q in components.schemas, got keys %v", successKey, schemaKeys(spec))
+	}
+	if successSchema.Type != "object" {
+		t.Errorf("expected %q to be an object, got type %v", successKey, successSchema.Type)
+	}
+	if _, ok := successSchema.Properties["id"]; !ok {
+		t.Errorf("expected %q to have property 'id', got %+v", successKey, successSchema.Properties)
+	}
+	if _, ok := successSchema.Properties["total"]; !ok {
+		t.Errorf("expected %q to have property 'total', got %+v", successKey, successSchema.Properties)
+	}
+
+	// 2. @Failure: same expectations as @Success
+	failureResp, ok := op.Responses["400"]
+	if !ok {
+		t.Fatalf("expected 400 response, got %+v", op.Responses)
+	}
+	AssertEqual(t, "#/components/schemas/"+failureKey, failureResp.Content["application/problem+json"].Schema.Ref)
+
+	failureSchema, ok := spec.Components.Schemas[failureKey]
+	if !ok {
+		t.Fatalf("expected %q in components.schemas, got keys %v", failureKey, schemaKeys(spec))
+	}
+	if failureSchema.Type != "object" {
+		t.Errorf("expected %q to be an object, got type %v", failureKey, failureSchema.Type)
+	}
+	if _, ok := failureSchema.Properties["message"]; !ok {
+		t.Errorf("expected %q to have property 'message', got %+v", failureKey, failureSchema.Properties)
+	}
+	if _, ok := failureSchema.Properties["code"]; !ok {
+		t.Errorf("expected %q to have property 'code', got %+v", failureKey, failureSchema.Properties)
+	}
+}
+
+// schemaKeys returns the component schema names, for use in failure messages.
+func schemaKeys(spec openapi.Spec) []string {
+	keys := make([]string, 0, len(spec.Components.Schemas))
+	for k := range spec.Components.Schemas {
+		keys = append(keys, k)
+	}
+	return keys
+}
