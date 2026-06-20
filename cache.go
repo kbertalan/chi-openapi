@@ -147,40 +147,20 @@ func (idx *TypeIndex) indexModule(root string) {
 	})
 }
 
-// defaultSchemaCache returns hard-coded schemas for well-known external library
-// types (time, uuid, sql, pgtype, ...) that cannot be introspected from source.
+// defaultSchemaCache returns hard-coded schemas for Go builtin and standard
+// library types that cannot be introspected from source. Third-party library
+// types are not included by default; register them via AddExternalKnownTypes
+// using the maps in the types package.
 func defaultSchemaCache() map[string]*Schema {
 	return map[string]*Schema{
 		// JSON and raw data types
 		"any":             {Description: "Any type (interface{})"},
 		"json.RawMessage": {Description: "Raw JSON data"},
-		"jsontext.Value":  {Description: "Raw JSON data"},
+		"jsontext.Value":  {Description: "Raw JSON data"}, // encoding/json/jsontext (json/v2)
 		"byte":            {Type: "integer", Format: "int32", Description: "Byte value"},
 		"[]byte":          {Type: "string", Format: "byte", Description: "Binary data (base64-encoded)"},
 		"rune":            {Type: "integer", Format: "int32", Description: "Rune (Unicode code point) value"},
 		"[]rune":          {Type: "string", Description: "String data"},
-
-		// PostgreSQL types (jackc/pgtype)
-		"pgtype.Text":        {Type: "string", Description: "PostgreSQL text type"},
-		"pgtype.Bool":        {Type: "boolean", Description: "PostgreSQL boolean type"},
-		"pgtype.Int2":        {Type: "integer", Format: "int32", Description: "PostgreSQL smallint (int16)"},
-		"pgtype.Int4":        {Type: "integer", Format: "int32", Description: "PostgreSQL integer (int32)"},
-		"pgtype.Int8":        {Type: "integer", Format: "int64", Description: "PostgreSQL bigint (int64)"},
-		"pgtype.Float4":      {Type: "number", Format: "float", Description: "PostgreSQL real (float32)"},
-		"pgtype.Float8":      {Type: "number", Format: "double", Description: "PostgreSQL double precision (float64)"},
-		"pgtype.Numeric":     {Type: "number", Description: "PostgreSQL numeric/decimal type"},
-		"pgtype.Interval":    {Type: "string", Description: "PostgreSQL interval type"},
-		"pgtype.Timestamptz": {Type: "string", Format: "date-time", Description: "PostgreSQL timestamp with timezone"},
-		"pgtype.Timestamp": {
-			Type:        "string",
-			Format:      "date-time",
-			Description: "PostgreSQL timestamp without timezone",
-		},
-		"pgtype.Date":  {Type: "string", Format: "date", Description: "PostgreSQL date type"},
-		"pgtype.Point": {Type: "string", Description: "PostgreSQL point type (e.g., '(1.0,2.0)')"},
-		"pgtype.UUID":  {Type: "string", Format: "uuid", Description: "PostgreSQL UUID type"},
-		"pgtype.JSONB": {Description: "PostgreSQL JSONB type"},
-		"pgtype.JSON":  {Description: "PostgreSQL JSON type"},
 
 		// Time types
 		"time.Time": {Type: "string", Format: "date-time", Description: "RFC3339 date-time"},
@@ -194,14 +174,6 @@ func defaultSchemaCache() map[string]*Schema {
 			Description: "Duration string (e.g., '1h30m'). Note: default Go JSON marshal is nanoseconds (integer).",
 		},
 		"time.Weekday": {Type: "integer", Description: "Go time.Weekday (0=Sunday, ...)"},
-
-		// UUID types
-		"uuid.UUID": {Type: "string", Format: "uuid", Description: "UUID string"},
-		"*uuid.UUID": {
-			Type:        []any{"string", "null"},
-			Format:      "uuid",
-			Description: "Nullable UUID string",
-		},
 
 		// Network types
 		"net.IP":    {Type: "string", Format: "ipv4", Description: "IPv4 address"},
@@ -222,16 +194,11 @@ func defaultSchemaCache() map[string]*Schema {
 		"sql.NullTime":    {Type: []any{"string", "null"}, Format: "date-time", Description: "Nullable date-time"},
 		"sql.RawBytes":    {Type: "string", Format: "byte", Description: "Raw database bytes (base64)"},
 
-		// Common Go types
+		// math/big
 		"big.Int": {Type: "string", Description: "Big integer as string"},
 		"*big.Int": {
 			Type:        []any{"string", "null"},
 			Description: "Nullable big integer as string",
-		},
-		"decimal.Decimal": {Type: "string", Description: "Decimal number as string"},
-		"*decimal.Decimal": {
-			Type:        []any{"string", "null"},
-			Description: "Nullable decimal number as string",
 		},
 	}
 }
@@ -408,6 +375,21 @@ func AddExternalKnownType(name string, schema *Schema) {
 	}
 	typeIndex.storeSchemaCache(name, schema)
 	slog.Debug("[openapi] AddExternalKnownType: added external known type", "name", name)
+}
+
+// AddExternalKnownTypes registers a batch of hard-coded schemas keyed by
+// qualified type name. Use it with the pre-built maps in the types package,
+// e.g. AddExternalKnownTypes(types.PgType).
+func AddExternalKnownTypes(schemas map[string]*Schema) {
+	ensureTypeIndex() // Ensure typeIndex is initialized
+	if typeIndex == nil {
+		slog.Error("[openapi] AddExternalKnownTypes: typeIndex is nil, cannot add external types")
+		return
+	}
+	for name, schema := range schemas {
+		typeIndex.storeSchemaCache(name, schema)
+	}
+	slog.Debug("[openapi] AddExternalKnownTypes: added external known types", "count", len(schemas))
 }
 
 // resetTypeIndexForTesting resets the type index for testing purposes
