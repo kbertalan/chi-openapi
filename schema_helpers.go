@@ -36,6 +36,17 @@ func hasType(s *Schema, typeName string) bool {
 	return false
 }
 
+// isComponentSchema reports whether s describes a named object/composite schema
+// that should be emitted as a reusable component and referenced via $ref, rather
+// than inlined at each usage site (as primitive/leaf schemas are).
+func isComponentSchema(s *Schema) bool {
+	if len(s.Properties) > 0 || len(s.AllOf) > 0 || len(s.OneOf) > 0 || len(s.AnyOf) > 0 {
+		return true
+	}
+	t, ok := s.Type.(string)
+	return ok && t == "object"
+}
+
 // primaryType returns the first non-null type if multiple types are present,
 // or the single type string.
 func primaryType(s *Schema) string {

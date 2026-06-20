@@ -1,5 +1,19 @@
 package openapi
 
+import "time"
+
+// TestExternalTagged and TestExternalPlain both use the cached external type
+// time.Time; the tagged one carries an openapi tag enhancement. They exist to
+// verify that inlining a cached schema copies it (tag enhancements on one usage
+// must not leak to others or to the shared cache).
+type TestExternalTagged struct {
+	At time.Time `json:"at" openapi:"title=CreatedAt"`
+}
+
+type TestExternalPlain struct {
+	At time.Time `json:"at"`
+}
+
 // TestSimple is a helper struct used by openapi tests to verify schema generation.
 type TestSimple struct {
 	ID   int    `json:"id"`

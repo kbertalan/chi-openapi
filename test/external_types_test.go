@@ -37,6 +37,34 @@ func TestExternalTypes_BulkRegister(t *testing.T) {
 	AssertEqual(t, "string", hasType(t, schema))
 }
 
+// Cached external types are inlined as independent copies: a struct-tag
+// enhancement on one usage must not leak to another usage, nor leave an orphan
+// component behind.
+func TestExternalTypes_InlinedAsCopies(t *testing.T) {
+	t.Parallel()
+
+	sg := NewTestSchemaGenerator()
+	tagged := sg.GenerateSchema("TestExternalTagged")
+	plain := sg.GenerateSchema("TestExternalPlain")
+
+	schemas := sg.GetSchemas()
+	taggedAt := schemas[refName(t, tagged.Ref)].Properties["at"]
+	plainAt := schemas[refName(t, plain.Ref)].Properties["at"]
+
+	// The tag enhancement applies only to the tagged usage.
+	AssertEqual(t, "CreatedAt", taggedAt.Title)
+	AssertEqual(t, "", plainAt.Title)
+
+	// Both still render the inline time.Time schema...
+	AssertEqual(t, "string", hasType(t, taggedAt))
+	AssertEqual(t, "string", hasType(t, plainAt))
+
+	// ...and no orphan "time.Time" component is emitted.
+	if _, ok := schemas["time.Time"]; ok {
+		t.Fatalf("unexpected orphan component for inlined external type: %v", schemas)
+	}
+}
+
 // Guard against an empty/typoed map in the types package.
 func TestExternalTypes_MapsPopulated(t *testing.T) {
 	t.Parallel()
@@ -60,4 +88,14 @@ func hasType(t *testing.T, s *openapi.Schema) string {
 		return str
 	}
 	return ""
+}
+
+// refName strips the "#/components/schemas/" prefix from a $ref.
+func refName(t *testing.T, ref string) string {
+	t.Helper()
+	const prefix = "#/components/schemas/"
+	if len(ref) <= len(prefix) {
+		t.Fatalf("not a component ref: %q", ref)
+	}
+	return ref[len(prefix):]
 }

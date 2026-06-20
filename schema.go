@@ -87,17 +87,23 @@ func (sg *SchemaGenerator) generateSchema(typeName string, ctx genCtx) *Schema {
 	qualifiedName := sg.getQualifiedTypeName(typeName, ctx)
 	slog.Debug("[openapi] GenerateSchema: type name conversion", "typeName", typeName, "qualifiedName", qualifiedName)
 
-	// 4) Check the schema cache (seeded external types + previously generated types)
+	// 4) Check the schema cache (seeded external types + previously generated types).
 	if schema, ok := sg.typeIndex.lookupSchemaCache(qualifiedName); ok {
 		slog.Debug("[openapi] GenerateSchema: using schemaCache", "qualifiedName", qualifiedName)
-		// Store in sg.schemas so it can be post-processed (renamed) if needed,
-		// but only if it's not a reference itself.
-		sg.mutex.Lock()
-		if _, exists := sg.schemas[qualifiedName]; !exists && schema.Ref == "" {
-			sg.schemas[qualifiedName] = schema
+		// Object-like cached schemas are emitted once as a component and
+		// referenced, like internal types.
+		if schema.Ref == "" && isComponentSchema(schema) {
+			sg.mutex.Lock()
+			if _, exists := sg.schemas[qualifiedName]; !exists {
+				sg.schemas[qualifiedName] = schema
+			}
+			sg.mutex.Unlock()
+			return &Schema{Ref: fmt.Sprintf("#/components/schemas/%s", qualifiedName)}
 		}
-		sg.mutex.Unlock()
-		return schema
+		// Primitive/leaf schemas are inlined at the usage site, so return a copy:
+		// callers (e.g. struct-tag enhancements) must not mutate the shared entry.
+		cp := *schema
+		return &cp
 	}
 
 	// 5) Check if schema already exists (avoid duplicate work)
