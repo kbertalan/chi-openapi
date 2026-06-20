@@ -30,10 +30,8 @@ func extractTag(tag, key string) string {
 	return reflect.StructTag(tag).Get(key)
 }
 
-// coerceTagValue converts a raw struct-tag string into a typed value matching
-// the schema's primary type, so that e.g. `default=5` on an integer field emits
-// the JSON number 5 rather than the string "5". On parse failure (or for string
-// and unknown types) it returns the raw string unchanged.
+// coerceTagValue converts a tag value to match the schema's primary type, so
+// `default=5` on an integer field emits 5, not "5". Falls back to the raw string.
 func coerceTagValue(schema *Schema, value string) any {
 	switch primaryType(schema) {
 	case "integer":
@@ -52,10 +50,8 @@ func coerceTagValue(schema *Schema, value string) any {
 	return value
 }
 
-// openapiTagKeys is the set of recognized keys in the `openapi` struct tag.
-// It is used to find key boundaries when splitting the comma-separated tag, so
-// that a comma inside a value (e.g. the regex pattern ^a{2,5}$) is not treated
-// as a separator.
+// openapiTagKeys are the recognized `openapi` tag keys, used to find segment
+// boundaries so a comma inside a value (e.g. ^a{2,5}$) isn't a separator.
 var openapiTagKeys = map[string]bool{
 	"format": true, "pattern": true, "example": true, "title": true,
 	"description": true, "deprecated": true, "readOnly": true, "writeOnly": true,
@@ -65,10 +61,8 @@ var openapiTagKeys = map[string]bool{
 }
 
 // splitOpenAPITagParts splits a comma-separated `openapi` tag into key=value
-// segments. A comma only begins a new segment when the text after it starts
-// with a recognized key followed by '='; otherwise the comma is part of the
-// preceding value (e.g. ^a{2,5}$ stays intact). This is a heuristic: a value
-// that literally contains ",<knownKey>=" will still be split there.
+// segments, treating a comma as a separator only when followed by a known key.
+// Heuristic: a value literally containing ",<knownKey>=" is still split there.
 func splitOpenAPITagParts(tag string) []string {
 	var parts []string
 	for _, seg := range strings.Split(tag, ",") {

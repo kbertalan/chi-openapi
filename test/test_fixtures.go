@@ -66,6 +66,14 @@ type TestNested struct {
 	Simple TestSimple `json:"simple"`
 }
 
+// TestRefSiblings exercises OpenAPI 3.1 sibling keywords on $ref fields:
+// a direct ref, a nullable ref, and an untagged ref (leak guard).
+type TestRefSiblings struct {
+	Decorated TestSimple  `json:"decorated" openapi:"description=the decorated one,deprecated=true,maxLength=50"`
+	Nullable  *TestSimple `json:"nullable"  openapi:"description=the nullable one"`
+	PlainRef  TestSimple  `json:"plainRef"`
+}
+
 // testHelperOther is an auxiliary struct referenced by TestWithQualified.
 type testHelperOther struct {
 	Foo int `json:"foo"`

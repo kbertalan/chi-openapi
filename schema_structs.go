@@ -60,9 +60,9 @@ func (sg *SchemaGenerator) convertStructToSchema(structType *ast.StructType, ctx
 			// Convert field type
 			fieldSchema := sg.convertFieldType(field.Type, ctx)
 
-			// Apply struct tag enhancements ONLY if not a reference schema
-			// References should not have sibling properties per OpenAPI 3.1 spec
-			if field.Tag != nil && fieldSchema.Ref == "" {
+			// OpenAPI 3.1 allows sibling keywords alongside $ref. The $ref schema
+			// is freshly allocated per field, so applying tags can't leak.
+			if field.Tag != nil {
 				tag := strings.Trim(field.Tag.Value, "`")
 				sg.applyEnhancedTags(fieldSchema, tag)
 			}
