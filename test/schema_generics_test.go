@@ -125,6 +125,49 @@ func TestSchemaGenerator_GenericSliceArgument(t *testing.T) {
 	AssertDeepEqual(t, expected, sg.GetSchemas())
 }
 
+// A struct field whose own type is a generic instantiation (e.g.
+// TestPaginatedResponse[TestBusinessObject]) should emit a $ref to the
+// monomorphized component and generate it plus all transitive leaves. This
+// exercises the *ast.IndexExpr arm in convertFieldType, distinct from a
+// top-level instantiation requested directly.
+func TestSchemaGenerator_GenericInstantiationAsField(t *testing.T) {
+	t.Parallel()
+
+	const (
+		holderKey   = "openapi.TestGenericFieldHolder"
+		envelopeKey = "openapi.TestPaginatedResponse-openapi.TestBusinessObject"
+	)
+
+	sg := NewTestSchemaGenerator()
+	ref := sg.GenerateSchema("TestGenericFieldHolder")
+	AssertEqual(t, schemaRef(holderKey), ref.Ref)
+
+	expected := map[string]openapi.Schema{
+		holderKey: {
+			Type: "object",
+			Properties: map[string]*openapi.Schema{
+				"envelope": {Ref: schemaRef(envelopeKey)},
+			},
+			Required: []string{"envelope"},
+		},
+		envelopeKey: {
+			Type: "object",
+			Properties: map[string]*openapi.Schema{
+				"data": {
+					Type:  "array",
+					Items: &openapi.Schema{Ref: schemaRef("openapi.TestBusinessObject")},
+				},
+				"page": {Ref: schemaRef("openapi.TestPageInfo")},
+			},
+			Required: []string{"data", "page"},
+		},
+		"openapi.TestBusinessObject": expectedTestBusinessObject,
+		"openapi.TestPageInfo":       expectedTestPageInfo,
+	}
+
+	AssertDeepEqual(t, expected, sg.GetSchemas())
+}
+
 // TestSchemaGenerator_GenericIsCachedAndDistinct ensures repeated instantiations
 // reuse one component and that different arguments yield different components.
 func TestSchemaGenerator_GenericIsCachedAndDistinct(t *testing.T) {

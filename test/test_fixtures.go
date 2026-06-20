@@ -44,6 +44,13 @@ type TestGenericPair[K comparable, V any] struct {
 	Value *V `json:"value,omitempty"`
 }
 
+// TestGenericFieldHolder exercises a struct field whose own type is a generic
+// instantiation (the *ast.IndexExpr arm in convertFieldType), as opposed to a
+// top-level instantiation requested directly.
+type TestGenericFieldHolder struct {
+	Envelope TestPaginatedResponse[TestBusinessObject] `json:"envelope"`
+}
+
 // TestWithPointer exercises pointer field handling in schema generation.
 type TestWithPointer struct {
 	Name *string `json:"name,omitempty"`
