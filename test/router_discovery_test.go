@@ -41,7 +41,7 @@ func TestDiscoverRoutes(t *testing.T) {
 	r.Get("/foo", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	r.Get("/openapi.json", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 
-	routes, err := openapi.DiscoverRoutes(r)
+	routes, err := openapi.DiscoverRoutes(r, nil)
 	if err != nil {
 		t.Fatalf("DiscoverRoutes returned error: %v", err)
 	}
@@ -75,12 +75,41 @@ func TestDiscoverRoutes_FiltersInternal(t *testing.T) {
 	r.Get("/swagger/doc", stub)
 	r.Get("/openapi/data", stub)
 	r.Get("/public", stub)
-	routes, err := openapi.DiscoverRoutes(r)
+	routes, err := openapi.DiscoverRoutes(r, nil)
 	if err != nil {
 		t.Fatalf("DiscoverRoutes returned error: %v", err)
 	}
 	if len(routes) != 1 || routes[0].Pattern != "/public" {
 		t.Errorf("Expected only /public route, got %v", routes)
+	}
+}
+
+// TestDiscoverRoutes_CustomSkip verifies a non-nil skip slice overrides the defaults.
+func TestDiscoverRoutes_CustomSkip(t *testing.T) {
+	r := chi.NewRouter()
+	stub := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
+	r.Get("/swagger/doc", stub)
+	r.Get("/internal/data", stub)
+	r.Get("/public", stub)
+
+	routes, err := openapi.DiscoverRoutes(r, []string{"/internal"})
+	if err != nil {
+		t.Fatalf("DiscoverRoutes returned error: %v", err)
+	}
+	patterns := map[string]bool{}
+	for _, ri := range routes {
+		patterns[ri.Pattern] = true
+	}
+	if len(routes) != 2 || !patterns["/swagger/doc"] || !patterns["/public"] {
+		t.Errorf("Expected /swagger/doc and /public, got %v", routes)
+	}
+
+	all, err := openapi.DiscoverRoutes(r, []string{})
+	if err != nil {
+		t.Fatalf("DiscoverRoutes returned error: %v", err)
+	}
+	if len(all) != 3 {
+		t.Errorf("Expected all 3 routes with empty skip, got %d", len(all))
 	}
 }
 
@@ -125,7 +154,7 @@ func TestDiscoverRoutes_HandlerMapping(t *testing.T) {
 	r.Get("/api/v1/menu/", menuHandler)
 	r.Get("/api/v1/coupon/", couponHandler)
 
-	routes, err := openapi.DiscoverRoutes(r)
+	routes, err := openapi.DiscoverRoutes(r, nil)
 	if err != nil {
 		t.Fatalf("DiscoverRoutes returned error: %v", err)
 	}

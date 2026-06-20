@@ -104,7 +104,7 @@ func (g *Generator) GenerateSpec(router chi.Router, cfg Config) (Spec, error) {
 
 	tags := make(map[string]bool)
 	referencedSchemes := make(map[string]bool)
-	routes, err := DiscoverRoutes(router)
+	routes, err := DiscoverRoutes(router, cfg.SkipRoutes)
 	if err != nil {
 		slog.Warn("[openapi] GenerateSpec: InspectRoutes error", "error", err)
 	}

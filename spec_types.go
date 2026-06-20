@@ -6,6 +6,9 @@ type Config struct {
 	Info            Info                      // Required: API metadata (Title and Version are mandatory)
 	Servers         []Server                  // Optional: List of API servers
 	SecuritySchemes map[string]SecurityScheme // Optional: security scheme definitions
+	// SkipRoutes excludes routes whose pattern contains any listed substring.
+	// nil uses the default documentation routes; an empty slice skips nothing.
+	SkipRoutes []string
 }
 
 // Contact represents contact information for the API.

@@ -79,19 +79,31 @@ func InspectRoutes(r chi.Router) ([]RouteInfo, error) {
 	return routes, nil
 }
 
-// DiscoverRoutes returns only non-internal routes for OpenAPI spec assembly.
-// This function filters out routes that are part of the OpenAPI tooling itself
-// (such as /swagger and /openapi endpoints) to avoid circular references in the specification.
-func DiscoverRoutes(r chi.Router) ([]RouteInfo, error) {
-	// Retrieve all routes via InspectRoutes
+// defaultSkipRoutes are the OpenAPI tooling's own documentation endpoints,
+// excluded to avoid circular references in the specification.
+var defaultSkipRoutes = []string{"/swagger", "/openapi"}
+
+// DiscoverRoutes returns routes for OpenAPI spec assembly, excluding any whose
+// pattern contains a substring in skip. A nil skip uses defaultSkipRoutes; an
+// empty slice skips nothing.
+func DiscoverRoutes(r chi.Router, skip []string) ([]RouteInfo, error) {
 	infos, err := InspectRoutes(r)
 	if err != nil {
 		return nil, err
 	}
+	if skip == nil {
+		skip = defaultSkipRoutes
+	}
 	var filtered []RouteInfo
 	for _, ri := range infos {
-		// Skip documentation/internal routes (swagger, openapi, openapi)
-		if strings.Contains(ri.Pattern, "/swagger") || strings.Contains(ri.Pattern, "/openapi") || strings.Contains(ri.Pattern, "/openapi") {
+		skipped := false
+		for _, s := range skip {
+			if strings.Contains(ri.Pattern, s) {
+				skipped = true
+				break
+			}
+		}
+		if skipped {
 			continue
 		}
 		filtered = append(filtered, ri)
