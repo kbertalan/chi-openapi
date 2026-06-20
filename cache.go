@@ -58,12 +58,45 @@ func ensureTypeIndex() {
 }
 
 // TypeIndex provides fast lookup of type definitions by package and type name.
+//
+// The types, files, qualifiedTypes and packageImports maps are populated once
+// during BuildTypeIndex and are read-only afterwards, so they need no locking
+// during schema generation. externalKnownTypes, by contrast, is written while
+// schemas are generated (and a single TypeIndex may be shared by several
+// SchemaGenerators), so all of its accesses are guarded by externalMu.
 type TypeIndex struct {
 	types              map[string]map[string]*ast.TypeSpec // package -> type -> spec
 	files              map[string]*ast.File                // file path -> parsed file
-	externalKnownTypes map[string]*Schema                  // external known types
 	qualifiedTypes     map[string]*ast.TypeSpec            // qualified type name -> spec (e.g., "order.CreateReq")
 	packageImports     map[string]string                   // import path -> package name (e.g., "github.com/user/sqlc" -> "sqlc")
+	externalMu         sync.RWMutex                        // guards externalKnownTypes
+	externalKnownTypes map[string]*Schema                  // external known types
+}
+
+// lookupExternalKnownType returns the schema registered for a qualified type
+// name, if any. Safe for concurrent use.
+func (idx *TypeIndex) lookupExternalKnownType(name string) (*Schema, bool) {
+	if idx == nil {
+		return nil, false
+	}
+	idx.externalMu.RLock()
+	defer idx.externalMu.RUnlock()
+	schema, ok := idx.externalKnownTypes[name]
+	return schema, ok
+}
+
+// storeExternalKnownType registers a schema for a qualified type name. Safe for
+// concurrent use.
+func (idx *TypeIndex) storeExternalKnownType(name string, schema *Schema) {
+	if idx == nil {
+		return
+	}
+	idx.externalMu.Lock()
+	defer idx.externalMu.Unlock()
+	if idx.externalKnownTypes == nil {
+		idx.externalKnownTypes = make(map[string]*Schema)
+	}
+	idx.externalKnownTypes[name] = schema
 }
 
 // BuildTypeIndex scans the given roots and builds a type index for all Go types.
@@ -376,10 +409,7 @@ func AddExternalKnownType(name string, schema *Schema) {
 		slog.Error("[openapi] AddExternalKnownType: typeIndex is nil, cannot add external type", "name", name)
 		return
 	}
-	if typeIndex.externalKnownTypes == nil {
-		typeIndex.externalKnownTypes = make(map[string]*Schema)
-	}
-	typeIndex.externalKnownTypes[name] = schema
+	typeIndex.storeExternalKnownType(name, schema)
 	slog.Debug("[openapi] AddExternalKnownType: added external known type", "name", name)
 }
 

@@ -88,18 +88,16 @@ func (sg *SchemaGenerator) generateSchema(typeName string, ctx genCtx) *Schema {
 	slog.Debug("[openapi] GenerateSchema: type name conversion", "typeName", typeName, "qualifiedName", qualifiedName)
 
 	// 4) Check external known types
-	if sg.typeIndex != nil {
-		if schema, ok := sg.typeIndex.externalKnownTypes[qualifiedName]; ok {
-			slog.Debug("[openapi] GenerateSchema: using externalKnownTypes", "qualifiedName", qualifiedName)
-			// Store in sg.schemas so it can be post-processed (renamed) if needed,
-			// but only if it's not a reference itself.
-			sg.mutex.Lock()
-			if _, exists := sg.schemas[qualifiedName]; !exists && schema.Ref == "" {
-				sg.schemas[qualifiedName] = schema
-			}
-			sg.mutex.Unlock()
-			return schema
+	if schema, ok := sg.typeIndex.lookupExternalKnownType(qualifiedName); ok {
+		slog.Debug("[openapi] GenerateSchema: using externalKnownTypes", "qualifiedName", qualifiedName)
+		// Store in sg.schemas so it can be post-processed (renamed) if needed,
+		// but only if it's not a reference itself.
+		sg.mutex.Lock()
+		if _, exists := sg.schemas[qualifiedName]; !exists && schema.Ref == "" {
+			sg.schemas[qualifiedName] = schema
 		}
+		sg.mutex.Unlock()
+		return schema
 	}
 
 	// 5) Check if schema already exists (avoid duplicate work)
@@ -129,25 +127,23 @@ func (sg *SchemaGenerator) generateSchema(typeName string, ctx genCtx) *Schema {
 
 	// 8) Generate the actual schema
 	var built *Schema
-	if sg.typeIndex != nil {
-		// Try qualified lookup first
-		if ts := sg.typeIndex.LookupQualifiedType(qualifiedName); ts != nil {
-			slog.Debug("[openapi] GenerateSchema: found type in TypeIndex", "qualifiedName", qualifiedName)
+	// Try qualified lookup first
+	if ts := sg.typeIndex.LookupQualifiedType(qualifiedName); ts != nil {
+		slog.Debug("[openapi] GenerateSchema: found type in TypeIndex", "qualifiedName", qualifiedName)
 
-			// Walk the looked-up type in its own package scope. This is a
-			// concrete (non-generic) type, so no type parameters are in scope.
-			walkCtx := genCtx{pkg: ctx.pkg}
-			if idx := strings.LastIndex(qualifiedName, "."); idx != -1 {
-				walkCtx.pkg = qualifiedName[:idx]
-			}
+		// Walk the looked-up type in its own package scope. This is a
+		// concrete (non-generic) type, so no type parameters are in scope.
+		walkCtx := genCtx{pkg: ctx.pkg}
+		if idx := strings.LastIndex(qualifiedName, "."); idx != -1 {
+			walkCtx.pkg = qualifiedName[:idx]
+		}
 
-			// Use convertFieldType to handle structs, maps, slices, etc.
-			// This ensures that type aliases like 'type WeeklyHours map[string]int' are correctly handled.
-			if _, ok := ts.Type.(*ast.StructType); ok {
-				built = sg.convertStructToSchema(ts.Type.(*ast.StructType), walkCtx)
-			} else {
-				built = sg.convertFieldType(ts.Type, walkCtx)
-			}
+		// Use convertFieldType to handle structs, maps, slices, etc.
+		// This ensures that type aliases like 'type WeeklyHours map[string]int' are correctly handled.
+		if _, ok := ts.Type.(*ast.StructType); ok {
+			built = sg.convertStructToSchema(ts.Type.(*ast.StructType), walkCtx)
+		} else {
+			built = sg.convertFieldType(ts.Type, walkCtx)
 		}
 	}
 
@@ -172,12 +168,10 @@ func (sg *SchemaGenerator) generateSchema(typeName string, ctx genCtx) *Schema {
 	sg.mutex.Lock()
 	slog.Debug("[openapi] GenerateSchema: storing schema", "qualifiedName", qualifiedName, "originalTypeName", typeName)
 	sg.schemas[qualifiedName] = built
-	if sg.typeIndex != nil && sg.typeIndex.externalKnownTypes != nil {
-		sg.typeIndex.externalKnownTypes[qualifiedName] = &Schema{
-			Ref: fmt.Sprintf("#/components/schemas/%s", qualifiedName),
-		}
-	}
 	sg.mutex.Unlock()
+	sg.typeIndex.storeExternalKnownType(qualifiedName, &Schema{
+		Ref: fmt.Sprintf("#/components/schemas/%s", qualifiedName),
+	})
 
 	// 11) Always return a reference
 	return &Schema{Ref: fmt.Sprintf("#/components/schemas/%s", qualifiedName)}
@@ -209,20 +203,23 @@ func (sg *SchemaGenerator) getQualifiedTypeName(typeName string, ctx genCtx) str
 		}
 	}
 
-	if sg.typeIndex != nil {
-		qualified := sg.typeIndex.GetQualifiedTypeName(typeName)
-		slog.Debug("[openapi] getQualifiedTypeName: converted", "typeName", typeName, "qualifiedName", qualified)
-		return qualified
-	}
-	slog.Debug("[openapi] getQualifiedTypeName: no typeIndex, using original", "typeName", typeName)
-	return typeName
+	qualified := sg.typeIndex.GetQualifiedTypeName(typeName)
+	slog.Debug("[openapi] getQualifiedTypeName: converted", "typeName", typeName, "qualifiedName", qualified)
+	return qualified
 }
 
 // GetSchemas returns all generated schemas.
 func (sg *SchemaGenerator) GetSchemas() map[string]Schema {
+	sg.mutex.Lock()
+	defer sg.mutex.Unlock()
 	slog.Debug("[openapi] GetSchemas: returning all generated schemas", "count", len(sg.schemas))
 	result := make(map[string]Schema, len(sg.schemas))
 	for name, schema := range sg.schemas {
+		// Skip nil placeholders for types still being generated (relevant only
+		// when GetSchemas races an in-progress GenerateSchema on another goroutine).
+		if schema == nil {
+			continue
+		}
 		result[name] = *schema
 	}
 	return result

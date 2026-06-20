@@ -129,18 +129,14 @@ func (sg *SchemaGenerator) convertFieldType(expr ast.Expr, ctx genCtx) *Schema {
 		// Pointer types: check for external types first (like *time.Time)
 		if ident, ok := t.X.(*ast.Ident); ok {
 			qualified := "*" + sg.getQualifiedTypeName(ident.Name, ctx)
-			if sg.typeIndex != nil {
-				if schema, ok := sg.typeIndex.externalKnownTypes[qualified]; ok {
-					return schema
-				}
+			if schema, ok := sg.typeIndex.lookupExternalKnownType(qualified); ok {
+				return schema
 			}
 		} else if sel, ok := t.X.(*ast.SelectorExpr); ok {
 			if ident, ok := sel.X.(*ast.Ident); ok {
 				qualified := "*" + ident.Name + "." + sel.Sel.Name
-				if sg.typeIndex != nil {
-					if schema, ok := sg.typeIndex.externalKnownTypes[qualified]; ok {
-						return schema
-					}
+				if schema, ok := sg.typeIndex.lookupExternalKnownType(qualified); ok {
+					return schema
 				}
 			}
 		}
