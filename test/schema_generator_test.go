@@ -224,4 +224,22 @@ func TestSchemaGenerator_TagEnhancements(t *testing.T) {
 
 	owner := schema.Properties["owner"]
 	AssertEqual(t, "uuid", owner.Format)
+
+	// description is applied from the openapi tag
+	count := schema.Properties["count"]
+	AssertEqual(t, "number of items", count.Description)
+	// default/example are coerced to the field's primary type, not left as strings
+	AssertEqual[any](t, int64(7), count.Default)
+	AssertEqual[any](t, int64(42), count.Example)
+
+	rate := schema.Properties["rate"]
+	AssertEqual[any](t, 1.5, rate.Default)
+
+	// a comma inside a value (regex quantifier) must not be treated as a
+	// key separator, and a following key after the comma still parses
+	code := schema.Properties["code"]
+	AssertEqual(t, "^a{2,5}$", code.Pattern)
+	if code.MinLength == nil || *code.MinLength != 2 {
+		t.Fatalf("expected code minLength=2, got %v", code.MinLength)
+	}
 }

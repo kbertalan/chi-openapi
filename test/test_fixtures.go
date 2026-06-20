@@ -78,10 +78,13 @@ type TestWithQualified struct {
 
 // TagExample exercises enhanced tag handling when generating schemas.
 type TagExample struct {
-	ID    string `json:"id"              openapi:"format=uuid,deprecated=true,default=00000000-0000-0000-0000-000000000000"`
-	Alias string `json:"alias,omitempty" openapi:"pattern=^a.*$,minLength=2,maxLength=5"`
-	Email string `json:"email"                                                                                              validate:"email"`
-	Owner string `json:"owner,omitempty"                                                                                                     binding:"uuid"`
+	ID    string  `json:"id"              openapi:"format=uuid,deprecated=true,default=00000000-0000-0000-0000-000000000000"`
+	Alias string  `json:"alias,omitempty" openapi:"pattern=^a.*$,minLength=2,maxLength=5"`
+	Email string  `json:"email"                                                                                              validate:"email"`
+	Owner string  `json:"owner,omitempty"                                                                                                     binding:"uuid"`
+	Count int     `json:"count"           openapi:"description=number of items,default=7,example=42"`
+	Rate  float64 `json:"rate"            openapi:"default=1.5"`
+	Code  string  `json:"code"            openapi:"pattern=^a{2,5}$,minLength=2"`
 }
 
 // MyEnum is a test enum representing string-based constants.

@@ -2,6 +2,7 @@
 package openapi
 
 import (
+	"reflect"
 	"strconv"
 	"strings"
 )
@@ -23,21 +24,70 @@ func extractJSONTag(tag string) string {
 
 // extractTag retrieves the value of a specific key from a struct tag string.
 // e.g. tag="validate:\"required\" json:\"foo\"", key="validate" -> "required".
+// It uses reflect.StructTag.Get so that values may contain spaces (e.g. a
+// description), which a naive space-tokenizing parser would truncate.
 func extractTag(tag, key string) string {
-	for _, part := range strings.Split(tag, " ") {
-		if strings.HasPrefix(part, key+":") {
-			v := strings.TrimPrefix(part, key+":")
-			return strings.Trim(v, `"`)
+	return reflect.StructTag(tag).Get(key)
+}
+
+// coerceTagValue converts a raw struct-tag string into a typed value matching
+// the schema's primary type, so that e.g. `default=5` on an integer field emits
+// the JSON number 5 rather than the string "5". On parse failure (or for string
+// and unknown types) it returns the raw string unchanged.
+func coerceTagValue(schema *Schema, value string) any {
+	switch primaryType(schema) {
+	case "integer":
+		if i, err := strconv.ParseInt(value, 10, 64); err == nil {
+			return i
+		}
+	case "number":
+		if f, err := strconv.ParseFloat(value, 64); err == nil {
+			return f
+		}
+	case "boolean":
+		if b, err := strconv.ParseBool(value); err == nil {
+			return b
 		}
 	}
-	return ""
+	return value
+}
+
+// openapiTagKeys is the set of recognized keys in the `openapi` struct tag.
+// It is used to find key boundaries when splitting the comma-separated tag, so
+// that a comma inside a value (e.g. the regex pattern ^a{2,5}$) is not treated
+// as a separator.
+var openapiTagKeys = map[string]bool{
+	"format": true, "pattern": true, "example": true, "title": true,
+	"description": true, "deprecated": true, "readOnly": true, "writeOnly": true,
+	"minimum": true, "maximum": true, "exclusiveMinimum": true, "exclusiveMin": true,
+	"exclusiveMaximum": true, "exclusiveMax": true, "minLength": true, "maxLength": true,
+	"minItems": true, "maxItems": true, "uniqueItems": true, "enum": true, "default": true,
+}
+
+// splitOpenAPITagParts splits a comma-separated `openapi` tag into key=value
+// segments. A comma only begins a new segment when the text after it starts
+// with a recognized key followed by '='; otherwise the comma is part of the
+// preceding value (e.g. ^a{2,5}$ stays intact). This is a heuristic: a value
+// that literally contains ",<knownKey>=" will still be split there.
+func splitOpenAPITagParts(tag string) []string {
+	var parts []string
+	for _, seg := range strings.Split(tag, ",") {
+		if key, _, ok := strings.Cut(seg, "="); ok && openapiTagKeys[strings.TrimSpace(key)] {
+			parts = append(parts, seg)
+		} else if len(parts) > 0 {
+			parts[len(parts)-1] += "," + seg
+		} else {
+			parts = append(parts, seg)
+		}
+	}
+	return parts
 }
 
 // applyEnhancedTags applies OpenAPI 3.1 metadata from struct tags to a schema.
 func (sg *SchemaGenerator) applyEnhancedTags(schema *Schema, tag string) {
 	// Parse openapi tag for enhanced features
 	if openapiTag := extractTag(tag, "openapi"); openapiTag != "" {
-		parts := strings.Split(openapiTag, ",")
+		parts := splitOpenAPITagParts(openapiTag)
 		for _, part := range parts {
 			part = strings.TrimSpace(part)
 			if strings.Contains(part, "=") {
@@ -49,9 +99,11 @@ func (sg *SchemaGenerator) applyEnhancedTags(schema *Schema, tag string) {
 				case "pattern":
 					schema.Pattern = value
 				case "example":
-					schema.Example = value
+					schema.Example = coerceTagValue(schema, value)
 				case "title":
 					schema.Title = value
+				case "description":
+					schema.Description = value
 				case "deprecated":
 					if value == "true" {
 						dep := true
@@ -111,7 +163,7 @@ func (sg *SchemaGenerator) applyEnhancedTags(schema *Schema, tag string) {
 						schema.Enum[i] = strings.TrimSpace(v)
 					}
 				case "default":
-					schema.Default = value
+					schema.Default = coerceTagValue(schema, value)
 				}
 			}
 		}
