@@ -18,12 +18,13 @@ func (sg *SchemaGenerator) convertStructToSchema(structType *ast.StructType) *Sc
 		// Ensure dependent schemas generated for the field type
 		switch t := field.Type.(type) {
 		case *ast.Ident:
-			if t.Obj != nil && t.Obj.Kind == ast.Typ {
+			if t.Obj != nil && t.Obj.Kind == ast.Typ && !sg.isTypeParam(t.Name) {
 				qualified := sg.getQualifiedTypeName(t.Name)
 				_ = sg.GenerateSchema(qualified)
 			}
 		case *ast.StarExpr:
-			if ident, ok := t.X.(*ast.Ident); ok && ident.Obj != nil && ident.Obj.Kind == ast.Typ {
+			if ident, ok := t.X.(*ast.Ident); ok && ident.Obj != nil && ident.Obj.Kind == ast.Typ &&
+				!sg.isTypeParam(ident.Name) {
 				qualified := sg.getQualifiedTypeName(ident.Name)
 				_ = sg.GenerateSchema(qualified)
 			}
@@ -102,6 +103,13 @@ func (sg *SchemaGenerator) convertStructToSchema(structType *ast.StructType) *Sc
 func (sg *SchemaGenerator) convertFieldType(expr ast.Expr) *Schema {
 	slog.Debug("[openapi] convertFieldType: called")
 
+	// Generic type-parameter substitution: when converting the body of an
+	// instantiated generic, a bare type-parameter identifier (e.g. T) resolves
+	// to the concrete argument supplied at the instantiation site.
+	if id, ok := expr.(*ast.Ident); ok && sg.isTypeParam(id.Name) {
+		return sg.convertTypeString(sg.typeParams[id.Name])
+	}
+
 	switch t := expr.(type) {
 	case *ast.Ident:
 		// Basic Go types
@@ -173,6 +181,14 @@ func (sg *SchemaGenerator) convertFieldType(expr ast.Expr) *Schema {
 	case *ast.InterfaceType:
 		// Empty interface as object
 		return &Schema{Type: "object"}
+
+	case *ast.IndexExpr, *ast.IndexListExpr:
+		// Generic instantiation as a field type, e.g. PaginatedResponse[Item].
+		// Reconstruct the instantiation string (substituting any active type
+		// parameters) and generate it as its own component.
+		if inst := sg.exprTypeString(expr); inst != "" {
+			return sg.GenerateSchema(inst)
+		}
 	}
 
 	slog.Debug("[openapi] convertFieldType: unknown type, defaulting to object")

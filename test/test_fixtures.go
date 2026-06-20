@@ -6,6 +6,30 @@ type TestSimple struct {
 	Name string `json:"name"`
 }
 
+// TestPageInfo carries pagination metadata for TestPaginatedResponse.
+type TestPageInfo struct {
+	CurrentPage int `json:"currentPage"`
+	TotalPages  int `json:"totalPages"`
+}
+
+// TestBusinessObject is a concrete payload used to instantiate generics.
+type TestBusinessObject struct {
+	ID   int    `json:"id"`
+	Name string `json:"name"`
+}
+
+// TestPaginatedResponse is a generic envelope: a page of T plus page metadata.
+type TestPaginatedResponse[T any] struct {
+	Data []T          `json:"data"`
+	Page TestPageInfo `json:"page"`
+}
+
+// TestGenericPair exercises multiple type parameters and a pointer parameter.
+type TestGenericPair[K comparable, V any] struct {
+	Key   K  `json:"key"`
+	Value *V `json:"value,omitempty"`
+}
+
 // TestWithPointer exercises pointer field handling in schema generation.
 type TestWithPointer struct {
 	Name *string `json:"name,omitempty"`

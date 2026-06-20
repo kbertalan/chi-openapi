@@ -14,7 +14,8 @@ type SchemaGenerator struct {
 	schemas        map[string]*Schema
 	typeIndex      *TypeIndex
 	mutex          sync.Mutex
-	currentPackage string // tracks the package of the struct being processed
+	currentPackage string            // tracks the package of the struct being processed
+	typeParams     map[string]string // active generic type-parameter substitutions (param name -> resolved type string)
 }
 
 // NewSchemaGenerator creates a new schema generator. Optionally accepts a TypeIndex.
@@ -49,6 +50,12 @@ func (sg *SchemaGenerator) GenerateSchema(typeName string) *Schema {
 	// 2) For basic types, return directly without caching
 	if isBasicType(typeName) {
 		return sg.generateBasicTypeSchema(typeName)
+	}
+
+	// 2b) Generic instantiations such as PaginatedResponse[BusinessObject].
+	// These are monomorphized into a dedicated component schema.
+	if base, args, ok := parseGenericInstantiation(typeName); ok {
+		return sg.generateGenericSchema(base, args)
 	}
 
 	// 3) Normalize the type name to use qualified names
