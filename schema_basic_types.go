@@ -69,14 +69,14 @@ func isBasicType(typeName string) bool {
 
 // generateBasicTypeSchema returns a Schema for basic Go types (primitives, slices, pointers).
 // It handles arrays and pointers by delegating to GenerateSchema for element types.
-func (sg *SchemaGenerator) generateBasicTypeSchema(typeName string) *Schema {
+func (sg *SchemaGenerator) generateBasicTypeSchema(typeName string, ctx genCtx) *Schema {
 	if strings.HasPrefix(typeName, "[]") {
 		elem := strings.TrimPrefix(typeName, "[]")
-		return &Schema{Type: "array", Items: sg.GenerateSchema(elem)}
+		return &Schema{Type: "array", Items: sg.generateSchema(elem, ctx)}
 	}
 	if strings.HasPrefix(typeName, "*") {
 		// Try to see if the pointer type is known externally first (e.g. *time.Time)
-		qualified := sg.getQualifiedTypeName(typeName)
+		qualified := sg.getQualifiedTypeName(typeName, ctx)
 		if sg.typeIndex != nil {
 			if schema, ok := sg.typeIndex.externalKnownTypes[qualified]; ok {
 				return schema
@@ -98,7 +98,7 @@ func (sg *SchemaGenerator) generateBasicTypeSchema(typeName string) *Schema {
 		}
 
 		// For complex types or slices/maps, use anyOf to avoid type conflicts
-		underlying := sg.GenerateSchema(clean)
+		underlying := sg.generateSchema(clean, ctx)
 		return &Schema{
 			AnyOf: []*Schema{
 				underlying,

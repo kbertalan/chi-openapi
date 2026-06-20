@@ -7,7 +7,7 @@ import (
 )
 
 // convertStructToSchema converts a Go AST struct type into an OpenAPI object schema.
-func (sg *SchemaGenerator) convertStructToSchema(structType *ast.StructType) *Schema {
+func (sg *SchemaGenerator) convertStructToSchema(structType *ast.StructType, ctx genCtx) *Schema {
 	slog.Debug("[openapi] convertStructToSchema: called")
 
 	var allOf []*Schema
@@ -18,26 +18,26 @@ func (sg *SchemaGenerator) convertStructToSchema(structType *ast.StructType) *Sc
 		// Ensure dependent schemas generated for the field type
 		switch t := field.Type.(type) {
 		case *ast.Ident:
-			if t.Obj != nil && t.Obj.Kind == ast.Typ && !sg.isTypeParam(t.Name) {
-				qualified := sg.getQualifiedTypeName(t.Name)
-				_ = sg.GenerateSchema(qualified)
+			if t.Obj != nil && t.Obj.Kind == ast.Typ && !ctx.isTypeParam(t.Name) {
+				qualified := sg.getQualifiedTypeName(t.Name, ctx)
+				_ = sg.generateSchema(qualified, ctx)
 			}
 		case *ast.StarExpr:
 			if ident, ok := t.X.(*ast.Ident); ok && ident.Obj != nil && ident.Obj.Kind == ast.Typ &&
-				!sg.isTypeParam(ident.Name) {
-				qualified := sg.getQualifiedTypeName(ident.Name)
-				_ = sg.GenerateSchema(qualified)
+				!ctx.isTypeParam(ident.Name) {
+				qualified := sg.getQualifiedTypeName(ident.Name, ctx)
+				_ = sg.generateSchema(qualified, ctx)
 			}
 		case *ast.SelectorExpr:
 			if ident, ok := t.X.(*ast.Ident); ok {
 				qualified := ident.Name + "." + t.Sel.Name
-				_ = sg.GenerateSchema(qualified)
+				_ = sg.generateSchema(qualified, ctx)
 			}
 		}
 
 		if len(field.Names) == 0 {
 			// Handle embedded field
-			embeddedSchema := sg.convertFieldType(field.Type)
+			embeddedSchema := sg.convertFieldType(field.Type, ctx)
 			allOf = append(allOf, embeddedSchema)
 			continue
 		}
@@ -58,7 +58,7 @@ func (sg *SchemaGenerator) convertStructToSchema(structType *ast.StructType) *Sc
 			}
 
 			// Convert field type
-			fieldSchema := sg.convertFieldType(field.Type)
+			fieldSchema := sg.convertFieldType(field.Type, ctx)
 
 			// Apply struct tag enhancements ONLY if not a reference schema
 			// References should not have sibling properties per OpenAPI 3.1 spec
@@ -100,14 +100,14 @@ func (sg *SchemaGenerator) convertStructToSchema(structType *ast.StructType) *Sc
 
 // convertFieldType inspects a Go AST expression and returns its OpenAPI schema representation.
 // It handles identifiers, pointers, arrays, selectors, maps, and empty interfaces.
-func (sg *SchemaGenerator) convertFieldType(expr ast.Expr) *Schema {
+func (sg *SchemaGenerator) convertFieldType(expr ast.Expr, ctx genCtx) *Schema {
 	slog.Debug("[openapi] convertFieldType: called")
 
 	// Generic type-parameter substitution: when converting the body of an
 	// instantiated generic, a bare type-parameter identifier (e.g. T) resolves
 	// to the concrete argument supplied at the instantiation site.
-	if id, ok := expr.(*ast.Ident); ok && sg.isTypeParam(id.Name) {
-		return sg.convertTypeString(sg.typeParams[id.Name])
+	if id, ok := expr.(*ast.Ident); ok && ctx.isTypeParam(id.Name) {
+		return sg.convertTypeString(ctx.typeParams[id.Name], ctx)
 	}
 
 	switch t := expr.(type) {
@@ -122,13 +122,13 @@ func (sg *SchemaGenerator) convertFieldType(expr ast.Expr) *Schema {
 			return schema
 		}
 		// Custom types
-		qualified := sg.getQualifiedTypeName(t.Name)
-		return sg.GenerateSchema(qualified)
+		qualified := sg.getQualifiedTypeName(t.Name, ctx)
+		return sg.generateSchema(qualified, ctx)
 
 	case *ast.StarExpr:
 		// Pointer types: check for external types first (like *time.Time)
 		if ident, ok := t.X.(*ast.Ident); ok {
-			qualified := "*" + sg.getQualifiedTypeName(ident.Name)
+			qualified := "*" + sg.getQualifiedTypeName(ident.Name, ctx)
 			if sg.typeIndex != nil {
 				if schema, ok := sg.typeIndex.externalKnownTypes[qualified]; ok {
 					return schema
@@ -146,7 +146,7 @@ func (sg *SchemaGenerator) convertFieldType(expr ast.Expr) *Schema {
 		}
 
 		// Fallback: Pointer types: wrap with nullability to support OAS 3.1
-		underlying := sg.convertFieldType(t.X)
+		underlying := sg.convertFieldType(t.X, ctx)
 		if underlying.Ref != "" {
 			// For references, we use anyOf to avoid type conflicts (e.g. if the ref is a string enum)
 			return &Schema{
@@ -164,19 +164,19 @@ func (sg *SchemaGenerator) convertFieldType(expr ast.Expr) *Schema {
 
 	case *ast.ArrayType:
 		// Arrays and slices
-		elem := sg.convertFieldType(t.Elt)
+		elem := sg.convertFieldType(t.Elt, ctx)
 		return &Schema{Type: "array", Items: elem}
 
 	case *ast.SelectorExpr:
 		// Qualified types (e.g., time.Time)
 		if ident, ok := t.X.(*ast.Ident); ok {
 			qualified := ident.Name + "." + t.Sel.Name
-			return sg.GenerateSchema(qualified)
+			return sg.generateSchema(qualified, ctx)
 		}
 
 	case *ast.MapType:
 		// Maps as object with additionalProperties
-		return &Schema{Type: "object", AdditionalProperties: sg.convertFieldType(t.Value)}
+		return &Schema{Type: "object", AdditionalProperties: sg.convertFieldType(t.Value, ctx)}
 
 	case *ast.InterfaceType:
 		// Empty interface as object
@@ -186,8 +186,8 @@ func (sg *SchemaGenerator) convertFieldType(expr ast.Expr) *Schema {
 		// Generic instantiation as a field type, e.g. PaginatedResponse[Item].
 		// Reconstruct the instantiation string (substituting any active type
 		// parameters) and generate it as its own component.
-		if inst := sg.exprTypeString(expr); inst != "" {
-			return sg.GenerateSchema(inst)
+		if inst := sg.exprTypeString(expr, ctx); inst != "" {
+			return sg.generateSchema(inst, ctx)
 		}
 	}
 

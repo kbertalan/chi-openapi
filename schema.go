@@ -11,11 +11,29 @@ import (
 // SchemaGenerator handles dynamic schema generation from Go types
 // If a TypeIndex is provided, it will be used for fast lookup.
 type SchemaGenerator struct {
-	schemas        map[string]*Schema
-	typeIndex      *TypeIndex
-	mutex          sync.Mutex
-	currentPackage string            // tracks the package of the struct being processed
-	typeParams     map[string]string // active generic type-parameter substitutions (param name -> resolved type string)
+	schemas   map[string]*Schema
+	typeIndex *TypeIndex
+	mutex     sync.Mutex
+}
+
+// genCtx carries the per-call-stack context for schema generation: the package
+// scope used to qualify bare type names, and the active generic type-parameter
+// substitutions. It is passed by value down the recursive conversion so
+// concurrent GenerateSchema calls never share this mutable state through the
+// generator. The typeParams map is never mutated in place (each generic
+// instantiation builds a fresh one), so copying the struct is safe.
+type genCtx struct {
+	pkg        string            // package scope for qualifying bare type names
+	typeParams map[string]string // active generic type-parameter substitutions (param name -> resolved type string)
+}
+
+// isTypeParam reports whether name is an active generic type parameter.
+func (c genCtx) isTypeParam(name string) bool {
+	if c.typeParams == nil {
+		return false
+	}
+	_, ok := c.typeParams[name]
+	return ok
 }
 
 // NewSchemaGenerator creates a new schema generator. Optionally accepts a TypeIndex.
@@ -39,6 +57,13 @@ func NewSchemaGenerator(opts ...*TypeIndex) *SchemaGenerator {
 // GenerateSchema creates a JSON schema for the given type name.
 // All types are stored using qualified names (e.g., "order.CreateReq", "sqlc.User").
 func (sg *SchemaGenerator) GenerateSchema(typeName string) *Schema {
+	return sg.generateSchema(typeName, genCtx{})
+}
+
+// generateSchema is the context-aware core of GenerateSchema. The ctx carries
+// the package scope and active type-parameter substitutions down the recursive
+// conversion instead of mutating shared generator state.
+func (sg *SchemaGenerator) generateSchema(typeName string, ctx genCtx) *Schema {
 	slog.Debug("[openapi] GenerateSchema: called", "typeName", typeName)
 
 	// 1) Fast-path simple/empty types
@@ -49,17 +74,17 @@ func (sg *SchemaGenerator) GenerateSchema(typeName string) *Schema {
 
 	// 2) For basic types, return directly without caching
 	if isBasicType(typeName) {
-		return sg.generateBasicTypeSchema(typeName)
+		return sg.generateBasicTypeSchema(typeName, ctx)
 	}
 
 	// 2b) Generic instantiations such as PaginatedResponse[BusinessObject].
 	// These are monomorphized into a dedicated component schema.
 	if base, args, ok := parseGenericInstantiation(typeName); ok {
-		return sg.generateGenericSchema(base, args)
+		return sg.generateGenericSchema(base, args, ctx)
 	}
 
 	// 3) Normalize the type name to use qualified names
-	qualifiedName := sg.getQualifiedTypeName(typeName)
+	qualifiedName := sg.getQualifiedTypeName(typeName, ctx)
 	slog.Debug("[openapi] GenerateSchema: type name conversion", "typeName", typeName, "qualifiedName", qualifiedName)
 
 	// 4) Check external known types
@@ -109,22 +134,20 @@ func (sg *SchemaGenerator) GenerateSchema(typeName string) *Schema {
 		if ts := sg.typeIndex.LookupQualifiedType(qualifiedName); ts != nil {
 			slog.Debug("[openapi] GenerateSchema: found type in TypeIndex", "qualifiedName", qualifiedName)
 
-			// Save old package context and set new one
-			oldPkg := sg.currentPackage
+			// Walk the looked-up type in its own package scope. This is a
+			// concrete (non-generic) type, so no type parameters are in scope.
+			walkCtx := genCtx{pkg: ctx.pkg}
 			if idx := strings.LastIndex(qualifiedName, "."); idx != -1 {
-				sg.currentPackage = qualifiedName[:idx]
+				walkCtx.pkg = qualifiedName[:idx]
 			}
 
 			// Use convertFieldType to handle structs, maps, slices, etc.
 			// This ensures that type aliases like 'type WeeklyHours map[string]int' are correctly handled.
 			if _, ok := ts.Type.(*ast.StructType); ok {
-				built = sg.convertStructToSchema(ts.Type.(*ast.StructType))
+				built = sg.convertStructToSchema(ts.Type.(*ast.StructType), walkCtx)
 			} else {
-				built = sg.convertFieldType(ts.Type)
+				built = sg.convertFieldType(ts.Type, walkCtx)
 			}
-
-			// Restore old package context
-			sg.currentPackage = oldPkg
 		}
 	}
 
@@ -162,7 +185,7 @@ func (sg *SchemaGenerator) GenerateSchema(typeName string) *Schema {
 
 // getQualifiedTypeName returns the qualified type name for schema keys.
 // It uses the TypeIndex if available, otherwise falls back to the original name.
-func (sg *SchemaGenerator) getQualifiedTypeName(typeName string) string {
+func (sg *SchemaGenerator) getQualifiedTypeName(typeName string, ctx genCtx) string {
 	// If already qualified, return as-is
 	if strings.Contains(typeName, ".") {
 		slog.Debug("[openapi] getQualifiedTypeName: already qualified", "typeName", typeName)
@@ -170,15 +193,15 @@ func (sg *SchemaGenerator) getQualifiedTypeName(typeName string) string {
 	}
 
 	// If we're inside a package context, try to qualify with that package first
-	if sg.currentPackage != "" && sg.typeIndex != nil {
-		if _, exists := sg.typeIndex.types[sg.currentPackage][typeName]; exists {
-			qualified := sg.currentPackage + "." + typeName
+	if ctx.pkg != "" && sg.typeIndex != nil {
+		if _, exists := sg.typeIndex.types[ctx.pkg][typeName]; exists {
+			qualified := ctx.pkg + "." + typeName
 			slog.Debug(
 				"[openapi] getQualifiedTypeName: qualified using currentPackage",
 				"typeName",
 				typeName,
 				"package",
-				sg.currentPackage,
+				ctx.pkg,
 				"qualified",
 				qualified,
 			)

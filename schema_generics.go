@@ -71,21 +71,21 @@ func sanitizeSchemaKey(s string) string {
 // qualifyTypeString resolves an unqualified type-argument string to its
 // qualified form, recursing through pointer/slice prefixes and nested generic
 // instantiations so the resulting key is stable and unambiguous.
-func (sg *SchemaGenerator) qualifyTypeString(s string) string {
+func (sg *SchemaGenerator) qualifyTypeString(s string, ctx genCtx) string {
 	s = strings.TrimSpace(s)
 	for _, prefix := range []string{"*", "[]"} {
 		if strings.HasPrefix(s, prefix) {
-			return prefix + sg.qualifyTypeString(s[len(prefix):])
+			return prefix + sg.qualifyTypeString(s[len(prefix):], ctx)
 		}
 	}
 	if base, args, ok := parseGenericInstantiation(s); ok {
 		qArgs := make([]string, len(args))
 		for i, a := range args {
-			qArgs[i] = sg.qualifyTypeString(a)
+			qArgs[i] = sg.qualifyTypeString(a, ctx)
 		}
-		return sg.getQualifiedTypeName(base) + "[" + strings.Join(qArgs, ",") + "]"
+		return sg.getQualifiedTypeName(base, ctx) + "[" + strings.Join(qArgs, ",") + "]"
 	}
-	return sg.getQualifiedTypeName(s)
+	return sg.getQualifiedTypeName(s, ctx)
 }
 
 // typeParamNames flattens the names declared in a type-parameter list,
@@ -105,11 +105,11 @@ func typeParamNames(fl *ast.FieldList) []string {
 
 // generateGenericSchema monomorphizes a generic type instantiation into a
 // dedicated component schema and returns a $ref to it.
-func (sg *SchemaGenerator) generateGenericSchema(base string, rawArgs []string) *Schema {
-	qBase := sg.getQualifiedTypeName(base)
+func (sg *SchemaGenerator) generateGenericSchema(base string, rawArgs []string, ctx genCtx) *Schema {
+	qBase := sg.getQualifiedTypeName(base, ctx)
 	args := make([]string, len(rawArgs))
 	for i, a := range rawArgs {
-		args[i] = sg.qualifyTypeString(a)
+		args[i] = sg.qualifyTypeString(a, ctx)
 	}
 
 	key := sanitizeSchemaKey(qBase + "[" + strings.Join(args, ",") + "]")
@@ -134,21 +134,19 @@ func (sg *SchemaGenerator) generateGenericSchema(base string, rawArgs []string) 
 			}
 		}
 
-		// Swap in the generic's package context and parameter substitutions for
-		// the duration of the conversion, then restore.
-		oldPkg, oldParams := sg.currentPackage, sg.typeParams
+		// Build a fresh context for the generic body: scoped to the generic's
+		// package, with the type-parameter substitutions in effect. This context
+		// is local to this call stack, so concurrent instantiations don't collide.
+		bodyCtx := genCtx{pkg: ctx.pkg, typeParams: subst}
 		if idx := strings.LastIndex(qBase, "."); idx != -1 {
-			sg.currentPackage = qBase[:idx]
+			bodyCtx.pkg = qBase[:idx]
 		}
-		sg.typeParams = subst
 
 		if st, ok := ts.Type.(*ast.StructType); ok {
-			built = sg.convertStructToSchema(st)
+			built = sg.convertStructToSchema(st, bodyCtx)
 		} else {
-			built = sg.convertFieldType(ts.Type)
+			built = sg.convertFieldType(ts.Type, bodyCtx)
 		}
-
-		sg.currentPackage, sg.typeParams = oldPkg, oldParams
 	}
 
 	if built == nil {
@@ -168,53 +166,43 @@ func (sg *SchemaGenerator) generateGenericSchema(base string, rawArgs []string) 
 // field-type conversion. This keeps a substituted type parameter rendering
 // identical to an equivalent inline struct field (e.g. a "string" argument has
 // no synthetic description, a "[]Foo" argument becomes an array, and so on).
-func (sg *SchemaGenerator) convertTypeString(typeStr string) *Schema {
+func (sg *SchemaGenerator) convertTypeString(typeStr string, ctx genCtx) *Schema {
 	if expr, err := parser.ParseExpr(typeStr); err == nil {
-		return sg.convertFieldType(expr)
+		return sg.convertFieldType(expr, ctx)
 	}
 	// Fall back to name-based generation if the string is not a parseable expr.
-	return sg.GenerateSchema(typeStr)
-}
-
-// isTypeParam reports whether name is an active generic type parameter in the
-// current conversion context.
-func (sg *SchemaGenerator) isTypeParam(name string) bool {
-	if sg.typeParams == nil {
-		return false
-	}
-	_, ok := sg.typeParams[name]
-	return ok
+	return sg.generateSchema(typeStr, ctx)
 }
 
 // exprTypeString renders an AST type expression back to a type string,
 // substituting any active generic type parameters with their concrete
 // arguments. Used to reconstruct nested generic instantiations encountered as
 // struct field types.
-func (sg *SchemaGenerator) exprTypeString(expr ast.Expr) string {
+func (sg *SchemaGenerator) exprTypeString(expr ast.Expr, ctx genCtx) string {
 	switch t := expr.(type) {
 	case *ast.Ident:
-		if sg.typeParams != nil {
-			if arg, ok := sg.typeParams[t.Name]; ok {
+		if ctx.typeParams != nil {
+			if arg, ok := ctx.typeParams[t.Name]; ok {
 				return arg
 			}
 		}
-		return sg.getQualifiedTypeName(t.Name)
+		return sg.getQualifiedTypeName(t.Name, ctx)
 	case *ast.SelectorExpr:
 		if id, ok := t.X.(*ast.Ident); ok {
 			return id.Name + "." + t.Sel.Name
 		}
 	case *ast.StarExpr:
-		return "*" + sg.exprTypeString(t.X)
+		return "*" + sg.exprTypeString(t.X, ctx)
 	case *ast.ArrayType:
-		return "[]" + sg.exprTypeString(t.Elt)
+		return "[]" + sg.exprTypeString(t.Elt, ctx)
 	case *ast.IndexExpr:
-		return sg.exprTypeString(t.X) + "[" + sg.exprTypeString(t.Index) + "]"
+		return sg.exprTypeString(t.X, ctx) + "[" + sg.exprTypeString(t.Index, ctx) + "]"
 	case *ast.IndexListExpr:
 		parts := make([]string, len(t.Indices))
 		for i, ix := range t.Indices {
-			parts[i] = sg.exprTypeString(ix)
+			parts[i] = sg.exprTypeString(ix, ctx)
 		}
-		return sg.exprTypeString(t.X) + "[" + strings.Join(parts, ",") + "]"
+		return sg.exprTypeString(t.X, ctx) + "[" + strings.Join(parts, ",") + "]"
 	}
 	return ""
 }
