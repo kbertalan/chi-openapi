@@ -102,6 +102,12 @@ type TagCollision struct {
 	Survives string `json:"survives" validate:"min=3"`
 }
 
+// TagBadNumeric has a non-numeric value on a numeric openapi keyword, which must
+// fail schema generation.
+type TagBadNumeric struct {
+	Count int `json:"count" openapi:"minimum=abc"`
+}
+
 // MyEnum is a test enum representing string-based constants.
 type MyEnum string
 

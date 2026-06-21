@@ -14,6 +14,7 @@ type SchemaGenerator struct {
 	schemas     map[string]*Schema
 	typeIndex   *TypeIndex
 	tagHandlers []TagHandler
+	errs        []error
 	mutex       sync.Mutex
 }
 

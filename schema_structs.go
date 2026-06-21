@@ -1,6 +1,7 @@
 package openapi
 
 import (
+	"fmt"
 	"go/ast"
 	"log/slog"
 	"strings"
@@ -64,7 +65,9 @@ func (sg *SchemaGenerator) convertStructToSchema(structType *ast.StructType, ctx
 			// is freshly allocated per field, so applying tags can't leak.
 			if field.Tag != nil {
 				tag := strings.Trim(field.Tag.Value, "`")
-				sg.applyEnhancedTags(fieldSchema, tag)
+				if err := sg.applyEnhancedTags(fieldSchema, tag); err != nil {
+					sg.addErr(fmt.Errorf("field %q: %w", jsonName, err))
+				}
 			}
 
 			properties[jsonName] = fieldSchema

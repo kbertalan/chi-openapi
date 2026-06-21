@@ -1,7 +1,9 @@
 package openapi_test
 
 import (
+	"errors"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -426,6 +428,25 @@ func securedHandler(w http.ResponseWriter, r *http.Request) {}
 
 type SecuredResponse struct {
 	OK bool `json:"ok"`
+}
+
+// TestGenerateSpec_TagHandlerErrorFails verifies that an error from a custom tag
+// handler aborts GenerateSpec.
+func TestGenerateSpec_TagHandlerErrorFails(t *testing.T) {
+	cfg := openapi.Config{Info: openapi.Info{Title: "Test", Version: "1.0.0"}}
+	g := openapi.NewGenerator()
+	g.RegisterTagHandler(func(*openapi.Schema, reflect.StructTag) error {
+		return errors.New("rejected tag")
+	})
+	g.GenerateSchema("openapi.TagCollision") // drives the handler over a struct field
+
+	_, err := g.GenerateSpec(chi.NewRouter(), cfg)
+	if err == nil {
+		t.Fatal("expected GenerateSpec to fail on tag handler error, got nil")
+	}
+	if !strings.Contains(err.Error(), "rejected tag") {
+		t.Errorf("expected error to mention 'rejected tag', got %v", err)
+	}
 }
 
 // TestGenerateSpec_SecurityUndeclaredFails verifies that a @Security scheme not

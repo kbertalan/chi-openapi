@@ -25,10 +25,10 @@ func schemaIsType(s *openapi.Schema, typeName string) bool {
 	return false
 }
 
-func validateTagHandler(schema *openapi.Schema, tag reflect.StructTag) {
+func validateTagHandler(schema *openapi.Schema, tag reflect.StructTag) error {
 	validateTag := tag.Get("validate")
 	if validateTag == "" {
-		return
+		return nil
 	}
 	for _, part := range strings.Split(validateTag, ",") {
 		part = strings.TrimSpace(part)
@@ -73,9 +73,10 @@ func validateTagHandler(schema *openapi.Schema, tag reflect.StructTag) {
 			}
 		}
 	}
+	return nil
 }
 
-func bindingTagHandler(schema *openapi.Schema, tag reflect.StructTag) {
+func bindingTagHandler(schema *openapi.Schema, tag reflect.StructTag) error {
 	bindingTag := tag.Get("binding")
 	if strings.Contains(bindingTag, "email") {
 		schema.Format = "email"
@@ -83,4 +84,5 @@ func bindingTagHandler(schema *openapi.Schema, tag reflect.StructTag) {
 	if strings.Contains(bindingTag, "uuid") {
 		schema.Format = "uuid"
 	}
+	return nil
 }

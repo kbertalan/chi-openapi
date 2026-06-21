@@ -2,6 +2,8 @@
 package openapi
 
 import (
+	"errors"
+	"fmt"
 	"reflect"
 	"strconv"
 	"strings"
@@ -71,9 +73,9 @@ func splitOpenAPITagParts(tag string) []string {
 
 // TagHandler applies schema metadata derived from a struct field's tag. Handlers
 // run before the built-in openapi handler, which wins on any keyword collision.
-// Register before the first GenerateSchema call; not safe to register concurrently
-// with generation.
-type TagHandler func(schema *Schema, tag reflect.StructTag)
+// A non-nil error aborts spec generation. Register before the first
+// GenerateSchema call; not safe to register concurrently with generation.
+type TagHandler func(schema *Schema, tag reflect.StructTag) error
 
 // RegisterTagHandler appends custom tag handlers, run in registration order.
 func (sg *SchemaGenerator) RegisterTagHandler(handlers ...TagHandler) {
@@ -81,97 +83,122 @@ func (sg *SchemaGenerator) RegisterTagHandler(handlers ...TagHandler) {
 }
 
 // applyEnhancedTags runs custom handlers first, then the openapi handler last so
-// its keywords override any colliding value a handler produced.
-func (sg *SchemaGenerator) applyEnhancedTags(schema *Schema, tag string) {
+// its keywords override any colliding value a handler produced. It returns the
+// first error encountered without applying the openapi tag.
+func (sg *SchemaGenerator) applyEnhancedTags(schema *Schema, tag string) error {
 	st := reflect.StructTag(tag)
 	for _, h := range sg.tagHandlers {
-		h(schema, st)
-	}
-	applyOpenAPITag(schema, st)
-}
-
-// applyOpenAPITag applies OpenAPI 3.1 metadata from the `openapi` struct tag.
-func applyOpenAPITag(schema *Schema, tag reflect.StructTag) {
-	if openapiTag := tag.Get("openapi"); openapiTag != "" {
-		parts := splitOpenAPITagParts(openapiTag)
-		for _, part := range parts {
-			part = strings.TrimSpace(part)
-			if strings.Contains(part, "=") {
-				kv := strings.SplitN(part, "=", 2)
-				key, value := strings.TrimSpace(kv[0]), strings.TrimSpace(kv[1])
-				switch key {
-				case "format":
-					schema.Format = value
-				case "pattern":
-					schema.Pattern = value
-				case "example":
-					schema.Example = coerceTagValue(schema, value)
-				case "title":
-					schema.Title = value
-				case "description":
-					schema.Description = value
-				case "deprecated":
-					if value == "true" {
-						dep := true
-						schema.Deprecated = &dep
-					}
-				case "readOnly":
-					if value == "true" {
-						ro := true
-						schema.ReadOnly = &ro
-					}
-				case "writeOnly":
-					if value == "true" {
-						wo := true
-						schema.WriteOnly = &wo
-					}
-				case "minimum":
-					if min, err := strconv.ParseFloat(value, 64); err == nil {
-						schema.Minimum = &min
-					}
-				case "maximum":
-					if max, err := strconv.ParseFloat(value, 64); err == nil {
-						schema.Maximum = &max
-					}
-				case "exclusiveMinimum", "exclusiveMin":
-					if min, err := strconv.ParseFloat(value, 64); err == nil {
-						schema.ExclusiveMinimum = &min
-					}
-				case "exclusiveMaximum", "exclusiveMax":
-					if max, err := strconv.ParseFloat(value, 64); err == nil {
-						schema.ExclusiveMaximum = &max
-					}
-				case "minLength":
-					if m, err := strconv.Atoi(value); err == nil {
-						schema.MinLength = &m
-					}
-				case "maxLength":
-					if m, err := strconv.Atoi(value); err == nil {
-						schema.MaxLength = &m
-					}
-				case "minItems":
-					if m, err := strconv.Atoi(value); err == nil {
-						schema.MinItems = &m
-					}
-				case "maxItems":
-					if m, err := strconv.Atoi(value); err == nil {
-						schema.MaxItems = &m
-					}
-				case "uniqueItems":
-					if value == "true" {
-						ui := true
-						schema.UniqueItems = &ui
-					}
-				case "enum":
-					vals := strings.Split(value, "|")
-					schema.Enum = make([]interface{}, len(vals))
-					for i, v := range vals {
-						schema.Enum[i] = strings.TrimSpace(v)
-					}
-				case "default":
-					schema.Default = coerceTagValue(schema, value)
-				}
-			}
+		if err := h(schema, st); err != nil {
+			return err
 		}
 	}
+	return applyOpenAPITag(schema, st)
+}
+
+// addErr records a tag-processing error for later retrieval via Err.
+func (sg *SchemaGenerator) addErr(err error) {
+	sg.mutex.Lock()
+	sg.errs = append(sg.errs, err)
+	sg.mutex.Unlock()
+}
+
+// Err returns the combined error from tag processing, or nil if none failed.
+func (sg *SchemaGenerator) Err() error {
+	sg.mutex.Lock()
+	defer sg.mutex.Unlock()
+	return errors.Join(sg.errs...)
+}
+
+// applyOpenAPITag applies OpenAPI 3.1 metadata from the `openapi` struct tag,
+// returning an error if a numeric keyword's value fails to convert.
+func applyOpenAPITag(schema *Schema, tag reflect.StructTag) error {
+	openapiTag := tag.Get("openapi")
+	if openapiTag == "" {
+		return nil
+	}
+	for _, part := range splitOpenAPITagParts(openapiTag) {
+		part = strings.TrimSpace(part)
+		key, value, ok := strings.Cut(part, "=")
+		if !ok {
+			continue
+		}
+		key, value = strings.TrimSpace(key), strings.TrimSpace(value)
+
+		parseFloat := func() (*float64, error) {
+			f, err := strconv.ParseFloat(value, 64)
+			if err != nil {
+				return nil, fmt.Errorf("openapi tag %q=%q: %w", key, value, err)
+			}
+			return &f, nil
+		}
+		parseInt := func() (*int, error) {
+			n, err := strconv.Atoi(value)
+			if err != nil {
+				return nil, fmt.Errorf("openapi tag %q=%q: %w", key, value, err)
+			}
+			return &n, nil
+		}
+
+		var err error
+		switch key {
+		case "format":
+			schema.Format = value
+		case "pattern":
+			schema.Pattern = value
+		case "example":
+			schema.Example = coerceTagValue(schema, value)
+		case "title":
+			schema.Title = value
+		case "description":
+			schema.Description = value
+		case "deprecated":
+			if value == "true" {
+				dep := true
+				schema.Deprecated = &dep
+			}
+		case "readOnly":
+			if value == "true" {
+				ro := true
+				schema.ReadOnly = &ro
+			}
+		case "writeOnly":
+			if value == "true" {
+				wo := true
+				schema.WriteOnly = &wo
+			}
+		case "minimum":
+			schema.Minimum, err = parseFloat()
+		case "maximum":
+			schema.Maximum, err = parseFloat()
+		case "exclusiveMinimum", "exclusiveMin":
+			schema.ExclusiveMinimum, err = parseFloat()
+		case "exclusiveMaximum", "exclusiveMax":
+			schema.ExclusiveMaximum, err = parseFloat()
+		case "minLength":
+			schema.MinLength, err = parseInt()
+		case "maxLength":
+			schema.MaxLength, err = parseInt()
+		case "minItems":
+			schema.MinItems, err = parseInt()
+		case "maxItems":
+			schema.MaxItems, err = parseInt()
+		case "uniqueItems":
+			if value == "true" {
+				ui := true
+				schema.UniqueItems = &ui
+			}
+		case "enum":
+			vals := strings.Split(value, "|")
+			schema.Enum = make([]any, len(vals))
+			for i, v := range vals {
+				schema.Enum[i] = strings.TrimSpace(v)
+			}
+		case "default":
+			schema.Default = coerceTagValue(schema, value)
+		}
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }

@@ -196,6 +196,11 @@ func (g *Generator) GenerateSpec(router chi.Router, cfg Config) (Spec, error) {
 		}
 	}
 
+	// Custom tag handlers run during schema generation above; surface any error.
+	if err := g.schemaGen.Err(); err != nil {
+		return spec, fmt.Errorf("[openapi] GenerateSpec: %w", err)
+	}
+
 	// Every @Security scheme must be declared in Config.SecuritySchemes.
 	var missing []string
 	for name := range referencedSchemes {

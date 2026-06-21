@@ -1,6 +1,9 @@
 package openapi_test
 
 import (
+	"errors"
+	"reflect"
+	"strings"
 	"testing"
 
 	openapi "github.com/kbertalan/chi-openapi"
@@ -271,5 +274,39 @@ func TestSchemaGenerator_NoBuiltinValidateSupport(t *testing.T) {
 
 	if ml := schema.Properties["survives"].MinLength; ml != nil {
 		t.Fatalf("expected validate tag to be ignored without a handler, got minLength=%v", *ml)
+	}
+}
+
+func TestSchemaGenerator_TagHandlerError(t *testing.T) {
+	t.Parallel()
+
+	sentinel := errors.New("boom")
+	sg := NewTestSchemaGenerator()
+	sg.RegisterTagHandler(func(*openapi.Schema, reflect.StructTag) error {
+		return sentinel
+	})
+	_ = sg.GenerateSchema("openapi.TagCollision")
+
+	err := sg.Err()
+	if err == nil {
+		t.Fatal("expected tag handler error, got nil")
+	}
+	if !errors.Is(err, sentinel) {
+		t.Fatalf("expected wrapped sentinel error, got %v", err)
+	}
+}
+
+func TestSchemaGenerator_OpenAPITagConversionError(t *testing.T) {
+	t.Parallel()
+
+	sg := NewTestSchemaGenerator()
+	_ = sg.GenerateSchema("openapi.TagBadNumeric")
+
+	err := sg.Err()
+	if err == nil {
+		t.Fatal("expected conversion error for openapi:\"minimum=abc\", got nil")
+	}
+	if !strings.Contains(err.Error(), "minimum") {
+		t.Fatalf("expected error to mention the failing keyword, got %v", err)
 	}
 }
