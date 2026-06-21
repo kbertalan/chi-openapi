@@ -8,13 +8,15 @@ It also shows the **two ways to obtain the OpenAPI document**:
 
 | Endpoint              | Source                              | When to use                                   |
 | --------------------- | ----------------------------------- | --------------------------------------------- |
-| `GET /openapi.json`   | generated **live** per request      | development — needs the `.go` sources present |
-| `GET /docs/openapi.json` | served from the **embedded** spec | production — baked into the binary, no source |
+| `GET /openapi.json`   | generated **live** per request      | ⚠️ development only — needs the `.go` sources present |
+| `GET /docs/openapi.json` | served from the **embedded** spec | ✅ production — baked into the binary, no source |
 
 chi-openapi derives schemas and annotations by parsing the source tree at
-runtime. The live endpoint therefore only works where the sources exist (e.g.
-`go run .`). The build-time generator writes [`openapi.json`](./openapi.json),
-which is embedded via `//go:embed` and ships in the binary.
+runtime. **The live endpoint therefore only works where the sources exist (e.g.
+`go run .`); a compiled binary has no sources, so it returns an unannotated spec.
+Production must use the embedded path.** The build-time generator writes
+[`openapi.json`](./openapi.json), which is embedded via `//go:embed` and ships in
+the binary.
 
 ## Layout
 

@@ -2,8 +2,9 @@
 // OpenAPI document:
 //
 //   - GET /openapi.json     generated live from the source tree on each request.
-//     Works only where the .go sources are present (e.g. `go run .`), so it is a
-//     development convenience.
+//     DEVELOPMENT ONLY: it parses the .go sources at request time and works only
+//     where they are present (e.g. `go run .`). In a compiled binary the sources
+//     are gone, so it returns an unannotated spec — never use it in production.
 //   - GET /docs/openapi.json served from the spec embedded at build time. It
 //     needs no source at runtime and is safe for a production binary.
 //
@@ -33,6 +34,10 @@ func main() {
 
 	// Live spec: regenerated per request by scanning source. Its own path
 	// contains "/openapi", so chi-openapi skips it from the document by default.
+	//
+	// WARNING: development only. This parses the .go sources at request time, so it
+	// returns an unannotated (effectively empty) spec from a compiled binary where
+	// the sources are absent. Production must serve the embedded spec below.
 	r.Get("/openapi.json", liveSpec)
 
 	// Embedded spec: served straight from the binary.
