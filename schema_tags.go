@@ -146,7 +146,7 @@ func applyOpenAPITag(schema *Schema, tag reflect.StructTag) error {
 		case "pattern":
 			schema.Pattern = value
 		case "example":
-			schema.Example = coerceTagValue(schema, value)
+			schema.Examples = append(schema.Examples, coerceTagValue(schema, value))
 		case "title":
 			schema.Title = value
 		case "description":

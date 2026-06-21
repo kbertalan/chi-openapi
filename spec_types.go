@@ -145,7 +145,6 @@ type Schema struct {
 	Enum             []any    `json:"enum,omitempty"`
 	Const            any      `json:"const,omitempty"`
 	Default          any      `json:"default,omitempty"`
-	Example          any      `json:"example,omitempty"`
 	Examples         []any    `json:"examples,omitempty"`
 
 	OneOf []*Schema `json:"oneOf,omitempty"`

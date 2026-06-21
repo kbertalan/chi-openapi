@@ -93,6 +93,7 @@ type TagExample struct {
 	Count int     `json:"count"           openapi:"description=number of items,default=7,example=42"`
 	Rate  float64 `json:"rate"            openapi:"default=1.5"`
 	Code  string  `json:"code"            openapi:"pattern=^a{2,5}$,minLength=2"`
+	Size  int     `json:"size"            openapi:"example=1,example=2,example=3"`
 }
 
 // TagCollision exercises handler/openapi precedence: where both set a keyword,

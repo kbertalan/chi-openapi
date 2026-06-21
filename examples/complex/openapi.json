@@ -751,7 +751,9 @@
           "sku": {
             "type": "string",
             "pattern": "^[A-Z]{3}-[0-9]{4}$",
-            "example": "ABC-0001"
+            "examples": [
+              "ABC-0001"
+            ]
           }
         },
         "required": [
@@ -850,7 +852,9 @@
             "type": "string",
             "minLength": 2,
             "maxLength": 64,
-            "example": "Ada Lovelace"
+            "examples": [
+              "Ada Lovelace"
+            ]
           }
         },
         "required": [
@@ -878,7 +882,9 @@
           },
           "name": {
             "type": "string",
-            "example": "Ada Lovelace"
+            "examples": [
+              "Ada Lovelace"
+            ]
           }
         },
         "required": [

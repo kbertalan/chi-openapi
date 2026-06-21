@@ -234,7 +234,15 @@ func TestSchemaGenerator_TagEnhancements(t *testing.T) {
 	AssertEqual(t, "number of items", count.Description)
 	// default/example are coerced to the field's primary type, not left as strings
 	AssertEqual[any](t, int64(7), count.Default)
-	AssertEqual[any](t, int64(42), count.Example)
+	if len(count.Examples) != 1 || count.Examples[0] != int64(42) {
+		t.Fatalf("expected count examples [42], got %v", count.Examples)
+	}
+
+	// multiple example= segments accumulate into the Examples slice
+	size := schema.Properties["size"]
+	if len(size.Examples) != 3 || size.Examples[0] != int64(1) || size.Examples[1] != int64(2) || size.Examples[2] != int64(3) {
+		t.Fatalf("expected size examples [1 2 3], got %v", size.Examples)
+	}
 
 	rate := schema.Properties["rate"]
 	AssertEqual[any](t, 1.5, rate.Default)
