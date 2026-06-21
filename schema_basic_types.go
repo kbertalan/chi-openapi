@@ -106,12 +106,7 @@ func (sg *SchemaGenerator) generateBasicTypeSchema(typeName string, ctx genCtx) 
 	}
 	// Fallback to mapping
 	openapiType, openapiFormat := mapGoTypeToOpenAPI(typeName)
-	desc := openapiType + " type" + "(" + typeName + ")"
-	if openapiFormat != "" {
-		desc += " with format " + openapiFormat
-	}
-
-	schema := &Schema{Type: openapiType, Description: desc}
+	schema := &Schema{Type: openapiType}
 	if openapiFormat != "" {
 		schema.Format = openapiFormat
 	}

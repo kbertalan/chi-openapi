@@ -1,0 +1,918 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Complex Example API",
+    "description": "Users and orders service demonstrating chi-openapi.",
+    "license": {
+      "name": "MIT",
+      "identifier": "MIT"
+    },
+    "version": "1.0.0"
+  },
+  "jsonSchemaDialect": "https://spec.openapis.org/oas/3.1/dialect/base",
+  "servers": [
+    {
+      "url": "http://localhost:8080",
+      "description": "Local development"
+    }
+  ],
+  "paths": {
+    "/healthz": {
+      "get": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Liveness probe",
+        "description": "Always returns 200 while the service is up.",
+        "operationId": "getHealthz",
+        "responses": {
+          "200": {
+            "description": "service is healthy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/api.HealthResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/apierr.ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/orders/": {
+      "get": {
+        "tags": [
+          "orders"
+        ],
+        "summary": "List orders",
+        "description": "Return a page of orders.",
+        "externalDocs": {
+          "description": "Orders guide",
+          "url": "https://example.com/docs/orders"
+        },
+        "operationId": "getOrders",
+        "parameters": [
+          {
+            "name": "Authorization",
+            "in": "header",
+            "description": "Bearer access token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "description": "Filter by status",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "page of matching orders",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/pagination.PaginatedResponse-orders.Order"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "missing or invalid bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/apierr.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/apierr.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "orders"
+        ],
+        "summary": "Create an order",
+        "operationId": "postOrders",
+        "parameters": [
+          {
+            "name": "Authorization",
+            "in": "header",
+            "description": "Bearer access token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "order to create",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/orders.CreateOrderRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "the created order",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/orders.Order"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "invalid payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/apierr.ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "missing or invalid bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/apierr.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/apierr.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/orders/{id}": {
+      "get": {
+        "tags": [
+          "orders"
+        ],
+        "summary": "Get an order",
+        "operationId": "getOrders",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "description": "Bearer access token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "the requested order",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/orders.Order"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "missing or invalid bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/apierr.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "order not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/apierr.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/apierr.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/orders/{id}/status": {
+      "patch": {
+        "tags": [
+          "orders"
+        ],
+        "summary": "Update order status",
+        "operationId": "patchOrdersStatus",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "description": "Bearer access token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "new status",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/orders.UpdateStatusRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "the updated order",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/orders.Order"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "invalid status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/apierr.ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "missing or invalid bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/apierr.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "order not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/apierr.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/apierr.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/users/": {
+      "get": {
+        "tags": [
+          "users"
+        ],
+        "summary": "List users",
+        "description": "Return a page of users, optionally capped by a limit.",
+        "operationId": "getUsers",
+        "parameters": [
+          {
+            "name": "X-API-Key",
+            "in": "header",
+            "description": "API key issued to the client",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum number of users to return",
+            "schema": {
+              "type": "integer",
+              "format": "int"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "page of users",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/pagination.PaginatedResponse-users.User"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "missing or invalid API key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/apierr.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/apierr.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Create a user",
+        "description": "Create a user from the supplied payload.",
+        "operationId": "postUsers",
+        "parameters": [
+          {
+            "name": "X-API-Key",
+            "in": "header",
+            "description": "API key issued to the client",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "user to create",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/users.CreateUserRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "the created user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/users.User"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "invalid payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/apierr.ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "missing or invalid API key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/apierr.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/apierr.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ]
+      }
+    },
+    "/users/{id}": {
+      "get": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Get a user",
+        "operationId": "getUsers",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-API-Key",
+            "in": "header",
+            "description": "API key issued to the client",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "the requested user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/users.User"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "missing or invalid API key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/apierr.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "user not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/apierr.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/apierr.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Delete a user",
+        "operationId": "deleteUsers",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-API-Key",
+            "in": "header",
+            "description": "API key issued to the client",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/users.User"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "missing or invalid API key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/apierr.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "user not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/apierr.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/apierr.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "api.HealthResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "apierr.ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "format": "int"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ]
+      },
+      "orders.CreateOrderRequest": {
+        "type": "object",
+        "properties": {
+          "customerId": {
+            "type": "string"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/orders.OrderItem"
+            }
+          }
+        },
+        "required": [
+          "customerId",
+          "items"
+        ]
+      },
+      "orders.Order": {
+        "type": "object",
+        "properties": {
+          "createdAt": {
+            "type": "string",
+            "description": "RFC3339 date-time",
+            "format": "date-time"
+          },
+          "customer": {
+            "$ref": "#/components/schemas/users.User"
+          },
+          "id": {
+            "type": "string"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/orders.OrderItem"
+            }
+          },
+          "status": {
+            "$ref": "#/components/schemas/orders.OrderStatus"
+          }
+        },
+        "required": [
+          "id",
+          "customer",
+          "items",
+          "status",
+          "createdAt"
+        ]
+      },
+      "orders.OrderItem": {
+        "type": "object",
+        "properties": {
+          "quantity": {
+            "type": "integer",
+            "format": "int",
+            "minimum": 1,
+            "maximum": 999,
+            "default": 1
+          },
+          "sku": {
+            "type": "string",
+            "pattern": "^[A-Z]{3}-[0-9]{4}$",
+            "example": "ABC-0001"
+          }
+        },
+        "required": [
+          "sku",
+          "quantity"
+        ]
+      },
+      "orders.OrderStatus": {
+        "type": "string",
+        "description": "Enum type orders.OrderStatus",
+        "enum": [
+          "pending",
+          "paid",
+          "shipped",
+          "cancelled"
+        ]
+      },
+      "orders.UpdateStatusRequest": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/orders.OrderStatus"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "pagination.PaginatedResponse-orders.Order": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/orders.Order"
+            }
+          },
+          "page": {
+            "type": "integer",
+            "format": "int"
+          },
+          "pageSize": {
+            "type": "integer",
+            "format": "int"
+          },
+          "totalItems": {
+            "type": "integer",
+            "format": "int"
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "pageSize",
+          "totalItems"
+        ]
+      },
+      "pagination.PaginatedResponse-users.User": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/users.User"
+            }
+          },
+          "page": {
+            "type": "integer",
+            "format": "int"
+          },
+          "pageSize": {
+            "type": "integer",
+            "format": "int"
+          },
+          "totalItems": {
+            "type": "integer",
+            "format": "int"
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "pageSize",
+          "totalItems"
+        ]
+      },
+      "users.CreateUserRequest": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "Contact email address",
+            "format": "email"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 64,
+            "example": "Ada Lovelace"
+          }
+        },
+        "required": [
+          "email",
+          "name"
+        ]
+      },
+      "users.User": {
+        "type": "object",
+        "properties": {
+          "createdAt": {
+            "type": "string",
+            "description": "RFC3339 date-time",
+            "format": "date-time",
+            "readOnly": true
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "id": {
+            "type": "string",
+            "description": "Server-assigned identifier",
+            "readOnly": true
+          },
+          "name": {
+            "type": "string",
+            "example": "Ada Lovelace"
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "name",
+          "createdAt"
+        ]
+      }
+    },
+    "securitySchemes": {
+      "ApiKeyAuth": {
+        "type": "apiKey",
+        "description": "API key sent in the X-API-Key header"
+      },
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "orders",
+      "description": "Orders related operations"
+    },
+    {
+      "name": "system",
+      "description": "System related operations"
+    },
+    {
+      "name": "users",
+      "description": "Users related operations"
+    }
+  ]
+}

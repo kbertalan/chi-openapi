@@ -148,7 +148,7 @@ func TestGenerateSpecRoutes_MethodReceiver(t *testing.T) {
 	expectedFailure := openapi.Response{
 		Description: "invalid invoice creation request",
 		Content: map[string]openapi.MediaTypeObject{
-			"application/problem+json": {
+			"application/json": {
 				Schema: &openapi.Schema{Ref: "#/components/schemas/InvalidRequest"},
 			},
 		},
@@ -540,7 +540,7 @@ func TestGenerateSpec_ResponseTypesRegistered(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected 400 response, got %+v", op.Responses)
 	}
-	AssertEqual(t, "#/components/schemas/"+failureKey, failureResp.Content["application/problem+json"].Schema.Ref)
+	AssertEqual(t, "#/components/schemas/"+failureKey, failureResp.Content["application/json"].Schema.Ref)
 
 	failureSchema, ok := spec.Components.Schemas[failureKey]
 	if !ok {

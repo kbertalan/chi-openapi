@@ -120,7 +120,7 @@ func (g *Generator) buildResponses(annotations *Annotation) map[string]Response 
 			schema := g.schemaGen.GenerateSchema(failure.Type)
 			responses[statusCode] = Response{
 				Description: failure.Description,
-				Content:     contentMap(failure.Produce, "application/problem+json", schema),
+				Content:     contentMap(failure.Produce, "application/json", schema),
 			}
 		}
 	}
