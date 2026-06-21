@@ -12,7 +12,7 @@ import (
 	"github.com/kbertalan/chi-openapi/serde"
 )
 
-// Annotation represents parsed swagger annotations
+// Annotation represents parsed annotations
 type Annotation struct {
 	Summary     string
 	Description string
@@ -242,6 +242,41 @@ func ParseAnnotations(filePath, functionName string) (*Annotation, error) {
 	}
 
 	return annotation, nil
+}
+
+// mergeAnnotations merges in middleware-then-handler order: slices are
+// concatenated, scalars/pointers overwritten by the last non-empty value (so the
+// handler wins). Returns nil only if every input is nil.
+func mergeAnnotations(anns []*Annotation) *Annotation {
+	var merged *Annotation
+	for _, a := range anns {
+		if a == nil {
+			continue
+		}
+		if merged == nil {
+			merged = &Annotation{}
+		}
+
+		if a.Summary != "" {
+			merged.Summary = a.Summary
+		}
+		if a.Description != "" {
+			merged.Description = a.Description
+		}
+		merged.Tags = append(merged.Tags, a.Tags...)
+		merged.Accept = append(merged.Accept, a.Accept...)
+		merged.Security = append(merged.Security, a.Security...)
+		merged.Parameters = append(merged.Parameters, a.Parameters...)
+		merged.Failures = append(merged.Failures, a.Failures...)
+
+		if a.See != nil {
+			merged.See = a.See
+		}
+		if a.Success != nil {
+			merged.Success = a.Success
+		}
+	}
+	return merged
 }
 
 // parseAnnotationComment decodes a doc-comment annotation block into an

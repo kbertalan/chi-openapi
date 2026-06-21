@@ -31,12 +31,28 @@ type HandlerInfo struct {
 
 // extractHandlerInfo resolves an http.Handler to source-level information.
 func (g *Generator) extractHandlerInfo(handler http.Handler, route string) *HandlerInfo {
-	slog.Debug("[openapi] extractHandlerInfo: called")
+	return g.resolveFuncInfo(reflect.ValueOf(handler), route, "handler")
+}
 
-	handlerValue := reflect.ValueOf(handler)
+// extractMiddlewareInfo resolves a middleware to source info. Anonymous
+// middlewares (e.g. constructor-returned closures) can't be resolved; register
+// them with RegisterMiddlewareAnnotation instead.
+func (g *Generator) extractMiddlewareInfo(mw func(http.Handler) http.Handler, route string) *HandlerInfo {
+	return g.resolveFuncInfo(reflect.ValueOf(mw), route, "middleware")
+}
+
+// resolveFuncInfo resolves a function value to its source location and a unique
+// function name. kind labels the subject in logs; an unresolvable middleware is
+// expected (falls back to registration), so it logs at debug rather than warn.
+func (g *Generator) resolveFuncInfo(handlerValue reflect.Value, route, kind string) *HandlerInfo {
+	slog.Debug("[openapi] resolveFuncInfo: called", "kind", kind)
+
+	skipWarn := kind == "middleware"
+
 	if handlerValue.Kind() != reflect.Func {
-		slog.Warn(
-			"[openapi] ignoring handler: only HandlerFunc-style handlers are supported "+
+		logIgnored(
+			skipWarn,
+			"[openapi] ignoring "+kind+": only HandlerFunc-style functions are supported "+
 				"(a named function or a method on a receiver)",
 			"kind", handlerValue.Kind().String(),
 			"route", route,
@@ -60,8 +76,9 @@ func (g *Generator) extractHandlerInfo(handler http.Handler, route string) *Hand
 	rawName := funcInfo.Name()
 
 	if anonFuncRegexp.MatchString(strings.TrimSuffix(rawName, "-fm")) {
-		slog.Warn(
-			"[openapi] ignoring handler: anonymous functions are not supported "+
+		logIgnored(
+			skipWarn,
+			"[openapi] ignoring "+kind+": anonymous functions are not supported "+
 				"(use a named function or a method on a receiver)",
 			"rawName", rawName,
 			"route", route,
@@ -72,7 +89,7 @@ func (g *Generator) extractHandlerInfo(handler http.Handler, route string) *Hand
 	name := resolveRuntimeName(rawName)
 
 	slog.Debug(
-		"[openapi] extractHandlerInfo: runtime info",
+		"[openapi] resolveFuncInfo: runtime info",
 		"file", file,
 		"rawName", rawName,
 		"name", name,
@@ -103,12 +120,12 @@ func (g *Generator) extractHandlerInfo(handler http.Handler, route string) *Hand
 
 resolved:
 	unique := buildUniqueFunctionName(file, name)
-	slog.Debug("[openapi] extractHandlerInfo: resolved", "file", file, "unique", unique)
+	slog.Debug("[openapi] resolveFuncInfo: resolved", "file", file, "unique", unique)
 
 	if file != "" {
 		if alt := preferRouteSegmentCandidate(typeIndex, route, file, recvType, name); alt != "" {
 			slog.Debug(
-				"[openapi] extractHandlerInfo: preferRouteSegmentCandidate switched file",
+				"[openapi] resolveFuncInfo: preferRouteSegmentCandidate switched file",
 				"from", file,
 				"to", alt,
 				"route", route,
@@ -119,8 +136,9 @@ resolved:
 	}
 
 	if name == "" || unique == "" {
-		slog.Warn(
-			"[openapi] ignoring handler: unable to resolve a function name",
+		logIgnored(
+			skipWarn,
+			"[openapi] ignoring "+kind+": unable to resolve a function name",
 			"rawName", rawName,
 			"route", route,
 		)
@@ -130,6 +148,15 @@ resolved:
 	hi := &HandlerInfo{File: file, FunctionName: unique}
 	g.setHandlerCache(pc, hi)
 	return hi
+}
+
+// logIgnored logs at warn, or debug when the subject is allowed to be unresolved.
+func logIgnored(debugOnly bool, msg string, args ...any) {
+	if debugOnly {
+		slog.Debug(msg, args...)
+		return
+	}
+	slog.Warn(msg, args...)
 }
 
 // getHandlerFromCache looks up handler info for a function pointer.

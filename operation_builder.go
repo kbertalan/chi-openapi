@@ -11,22 +11,26 @@ import (
 )
 
 // buildOperation turns a Chi route into an OpenAPI operation.
-func (g *Generator) buildOperation(
-	handler http.Handler,
-	route, method string,
-) Operation {
+func (g *Generator) buildOperation(ri RouteInfo) Operation {
+	route, method := ri.Pattern, ri.Method
 	slog.Debug("[openapi] buildOperation: called", "route", route, "method", method)
 
-	handlerInfo := g.extractHandlerInfo(handler, route)
+	// Middlewares first, handler last, so the handler wins on conflicting scalars.
+	var ordered []*Annotation
+	for _, mw := range ri.Middlewares {
+		ordered = append(ordered, g.middlewareAnnotation(mw, route))
+	}
 
-	var annotations *Annotation
+	handlerInfo := g.extractHandlerInfo(ri.HandlerFunc, route)
 	if handlerInfo != nil && handlerInfo.File != "" {
-		var err error
-		annotations, err = ParseAnnotations(handlerInfo.File, handlerInfo.FunctionName)
+		handlerAnnotation, err := ParseAnnotations(handlerInfo.File, handlerInfo.FunctionName)
 		if err != nil {
 			slog.Warn("[openapi] buildOperation: annotations parse error", "error", err)
 		}
+		ordered = append(ordered, handlerAnnotation)
 	}
+
+	annotations := mergeAnnotations(ordered)
 
 	op := Operation{
 		OperationID: generateOperationID(method, route),

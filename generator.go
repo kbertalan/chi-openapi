@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"log/slog"
 	"maps"
+	"net/http"
+	"reflect"
 	"slices"
 	"sort"
 	"strings"
@@ -16,6 +18,7 @@ import (
 type Generator struct {
 	schemaGen     *SchemaGenerator
 	handlerCache  map[uintptr]*HandlerInfo
+	mwAnnotations map[uintptr]*Annotation
 	cacheMu       sync.RWMutex
 	aclSlugOnce   sync.Once
 	aclSlugMap    map[string]string
@@ -41,8 +44,48 @@ func NewGeneratorWithCache(typeIndex *TypeIndex) *Generator {
 			typeIndex: typeIndex,
 		},
 		handlerCache:  make(map[uintptr]*HandlerInfo),
+		mwAnnotations: make(map[uintptr]*Annotation),
 		modelNameFunc: DefaultModelNameFunc,
 	}
+}
+
+// RegisterMiddlewareAnnotation supplies an annotation for a middleware whose doc
+// comment cannot be parsed (third-party, Chi, or constructor-returned closures).
+// It takes precedence over source parsing.
+//
+// Matching is by code pointer, so a closure registered here matches every
+// instance from the same constructor (e.g. middleware.Timeout(0) covers any d).
+func (g *Generator) RegisterMiddlewareAnnotation(middleware func(http.Handler) http.Handler, annotation *Annotation) {
+	if middleware == nil || annotation == nil {
+		return
+	}
+	pc := reflect.ValueOf(middleware).Pointer()
+	g.cacheMu.Lock()
+	g.mwAnnotations[pc] = annotation
+	g.cacheMu.Unlock()
+}
+
+// middlewareAnnotation returns the registered annotation, else the one parsed
+// from the middleware's source doc comment, else nil.
+func (g *Generator) middlewareAnnotation(mw func(http.Handler) http.Handler, route string) *Annotation {
+	pc := reflect.ValueOf(mw).Pointer()
+
+	g.cacheMu.RLock()
+	registered := g.mwAnnotations[pc]
+	g.cacheMu.RUnlock()
+	if registered != nil {
+		return registered
+	}
+
+	info := g.extractMiddlewareInfo(mw, route)
+	if info == nil || info.File == "" {
+		return nil
+	}
+	annotation, err := ParseAnnotations(info.File, info.FunctionName)
+	if err != nil {
+		slog.Warn("[openapi] middlewareAnnotation: annotations parse error", "error", err, "route", route)
+	}
+	return annotation
 }
 
 // NewGenerator creates a generator using the shared global TypeIndex.
@@ -112,10 +155,9 @@ func (g *Generator) GenerateSpec(router chi.Router, cfg Config) (Spec, error) {
 	for _, ri := range routes {
 		method := ri.Method
 		route := ri.Pattern
-		handler := ri.HandlerFunc
 		pathKey := convertRouteToOpenAPIPath(route)
 
-		operation := g.buildOperation(handler, route, method)
+		operation := g.buildOperation(ri)
 
 		pathItem := spec.Paths[pathKey]
 		switch strings.ToUpper(method) {
