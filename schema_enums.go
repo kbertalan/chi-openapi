@@ -73,8 +73,7 @@ func (sg *SchemaGenerator) extractEnumValues(packageName, typeName string) []int
 	return values
 }
 
-// isConstantOfType determines whether a constant ValueSpec AST node is declared as the specified type.
-// Returns true if the ValueSpec.Type matches the provided typeName.
+// isConstantOfType reports whether the ValueSpec is declared with the given type name.
 func (sg *SchemaGenerator) isConstantOfType(vs *ast.ValueSpec, typeName string) bool {
 	if vs.Type == nil {
 		return false

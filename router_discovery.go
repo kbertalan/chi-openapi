@@ -10,8 +10,7 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-// RouteInfo holds metadata about each registered route
-// including HTTP method, path pattern, handler name, and function.
+// RouteInfo holds metadata about a registered route.
 type RouteInfo struct {
 	Method      string
 	Pattern     string
@@ -48,13 +47,11 @@ func InspectRoutes(r chi.Router) ([]RouteInfo, error) {
 	err := chi.Walk(
 		r,
 		func(method string, route string, handler http.Handler, middlewares ...func(http.Handler) http.Handler) error {
-			// Attempt to extract http.HandlerFunc
 			var hf http.HandlerFunc
 			switch h := handler.(type) {
 			case http.HandlerFunc:
 				hf = h
 			default:
-				// wrap other handlers
 				hf = h.ServeHTTP
 			}
 			name := runtime.FuncForPC(reflect.ValueOf(hf).Pointer()).Name()

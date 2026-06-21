@@ -105,8 +105,7 @@ func (g *Generator) RegisterTagHandler(handlers ...TagHandler) {
 	g.schemaGen.RegisterTagHandler(handlers...)
 }
 
-// GenerateSchema manually adds a type to the internal schema generator.
-// This is useful for including types that are not automatically discovered via routes.
+// GenerateSchema adds a type to the schema generator, for types not discovered via routes.
 func (g *Generator) GenerateSchema(typeName string) *Schema {
 	return g.schemaGen.GenerateSchema(typeName)
 }
@@ -147,8 +146,7 @@ func (g *Generator) GenerateSpec(router chi.Router, cfg Config) (Spec, error) {
 		spec.Servers = slices.Clone(cfg.Servers)
 	}
 
-	// Register the security schemes declared in config. Every @Security name
-	// must resolve to one of these.
+	// Register the security schemes declared in config.
 	maps.Copy(spec.Components.SecuritySchemes, cfg.SecuritySchemes)
 
 	tags := make(map[string]bool)

@@ -5,17 +5,8 @@ import (
 	"strings"
 )
 
-/**
- * mapGoTypeToOpenAPI maps a Go type name to the corresponding OpenAPI primitive type and format.
- * JSON cannot represent int64/bigint/long values accurately, so we map them to strings.
- * JSON number type is a double-precision floating-point format which can only safely represent
- * integers up to 2^53-1. Beyond that, precision may be lost as int64 goes upto 2^63-1.
- *
- * Therefore, to avoid data loss when serializing/deserializing large integers,
- * we represent int64 and uint64 as strings in the OpenAPI schema.
- *
- * https://spec.openapis.org/registry/format/
- */
+// mapGoTypeToOpenAPI maps a Go type name to an OpenAPI primitive type and format.
+// int64/uint64 map to "string" because JSON numbers lose precision beyond 2^53-1.
 func mapGoTypeToOpenAPI(typeName string) (string, string) {
 	switch typeName {
 	case "int8":

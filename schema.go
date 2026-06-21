@@ -62,9 +62,8 @@ func (sg *SchemaGenerator) GenerateSchema(typeName string) *Schema {
 	return sg.generateSchema(typeName, genCtx{})
 }
 
-// generateSchema is the context-aware core of GenerateSchema. The ctx carries
-// the package scope and active type-parameter substitutions down the recursive
-// conversion instead of mutating shared generator state.
+// generateSchema is the context-aware core of GenerateSchema; ctx carries the
+// package scope and type-parameter substitutions down the recursive conversion.
 func (sg *SchemaGenerator) generateSchema(typeName string, ctx genCtx) *Schema {
 	slog.Debug("[openapi] GenerateSchema: called", "typeName", typeName)
 

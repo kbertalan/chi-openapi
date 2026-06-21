@@ -1,7 +1,7 @@
 // Test file to check enum extraction edge cases
 package openapi
 
-// EnumWithImplicitType tests const with implicit type from predecessor
+// StatusEnum: const with implicit type inherited from a predecessor.
 type StatusEnum string
 
 const (
@@ -10,7 +10,7 @@ const (
 	StatusPending  StatusEnum = "pending"
 )
 
-// EnumWithMixedDeclarations tests multiple types in const block
+// TypeA and TypeB: multiple enum types sharing one const block.
 type TypeA string
 type TypeB string
 
@@ -20,11 +20,3 @@ const (
 	TypeBVal1 TypeB = "b1"
 	TypeBVal2 TypeB = "b2"
 )
-
-// EnumFromOtherPackage simulates how sqlc enum constants might look
-// (Note: This would be in pkg/db/sqlc package in real code)
-// type DiscountType string
-// const (
-//     DiscountTypePercentage DiscountType = "percentage"
-//     DiscountTypeFixed      DiscountType = "fixed"
-// )

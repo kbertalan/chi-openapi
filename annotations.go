@@ -12,7 +12,7 @@ import (
 	"github.com/kbertalan/chi-openapi/serde"
 )
 
-// Annotation represents parsed annotations
+// Annotation is the parsed @-directive block from a handler or middleware doc comment.
 type Annotation struct {
 	Summary     string
 	Description string
@@ -68,10 +68,8 @@ type ErrorResponse struct {
 //
 // Behavior notes:
 //   - Returns nil, nil if no suitable file or comments are found (not an error).
-//   - Uses a local AST file cache to avoid repeated parsing of the same file.
 //   - Accepts fully-qualified function names (e.g. "menu.handler.List") and
 //     extracts the simple function name before matching the AST node.
-
 func ParseAnnotations(filePath, functionName string) (*Annotation, error) {
 	normalizedFilePath := filepath.ToSlash(filePath)
 	if strings.Contains(normalizedFilePath, "\\") {
@@ -108,8 +106,7 @@ func ParseAnnotations(filePath, functionName string) (*Annotation, error) {
 		}
 	}
 
-	// Update filePath and normalizedFilePath if we found a match via case-insensitive lookup
-	// (though LookupFile doesn't return the path, we can assume it found it if astFile != nil and it was from index)
+	// Re-normalize the original path for the disambiguation step below.
 	normalizedFilePath = filepath.ToSlash(filePath)
 	if strings.Contains(normalizedFilePath, "\\") {
 		normalizedFilePath = strings.ReplaceAll(normalizedFilePath, "\\", "/")

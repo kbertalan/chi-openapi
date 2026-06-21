@@ -107,7 +107,7 @@ func newDescriptor(t reflect.Type, token string) *fieldDescriptor {
 		fd.elemKind, _ = classify(fd.elemType)
 	case kindSliceSlice:
 		// elemType is the inner []scalar type; elemKind is the inner scalar's
-		// kind (used to parse/render each @Item value).
+		// kind (used to parse/render each bracketed element).
 		fd.elemKind, _ = classify(fd.elemType.Elem())
 	case kindMap:
 		fd.keyDesc = newDescriptor(t.Key(), "Key")

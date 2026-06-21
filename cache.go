@@ -32,9 +32,7 @@ type moduleInfo struct {
 	path string // module path (e.g. "github.com/me/app")
 }
 
-// Find a way to add method that will add external known types to the type index
-// This is useful for types that are not defined in the current package but are known to the OpenAPI spec,
-// such as types from external libraries or standard library types that we want to document.
+// ensureTypeIndex builds the global TypeIndex once.
 func ensureTypeIndex() {
 	// debug.PrintStack()
 	typeIndexOnce.Do(func() {
@@ -399,16 +397,8 @@ func resetTypeIndexForTesting() {
 	typeIndexOnce = sync.Once{}
 }
 
-// getQualifiedTypeName creates a qualified type name for indexing.
-// For external packages (like sqlc, pgtype), use the package name as-is.
-// For internal project types, use package.TypeName format.
+// getQualifiedTypeName returns the "pkg.TypeName" key used for indexing.
 func (idx *TypeIndex) getQualifiedTypeName(pkg, typeName string) string {
-	// Check if this is an external/third-party package
-	if idx.isExternalPackage(pkg) {
-		return pkg + "." + typeName
-	}
-
-	// For internal project types, use package.TypeName format
 	return pkg + "." + typeName
 }
 

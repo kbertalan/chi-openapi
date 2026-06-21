@@ -1,10 +1,8 @@
 // Command complex is the example server. It demonstrates two ways to expose the
 // OpenAPI document:
 //
-//   - GET /openapi.json     generated live from the source tree on each request.
-//     DEVELOPMENT ONLY: it parses the .go sources at request time and works only
-//     where they are present (e.g. `go run .`). In a compiled binary the sources
-//     are gone, so it returns an unannotated spec — never use it in production.
+//   - GET /openapi.json      generated live from the source tree (development only;
+//     see the WARNING in main where the route is served).
 //   - GET /docs/openapi.json served from the spec embedded at build time. It
 //     needs no source at runtime and is safe for a production binary.
 //

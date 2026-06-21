@@ -79,8 +79,8 @@ func parseScalarLine(s string) (string, error) {
 }
 
 // splitArgs tokenizes a line into whitespace-separated positional arguments.
-// A double-quoted span groups spaces and commas into a single argument; the
-// surrounding quotes are removed and backslash escapes interpreted.
+// A double-quoted span keeps spaces within a single argument; the surrounding
+// quotes are removed and backslash escapes interpreted.
 func splitArgs(s string) ([]string, error) {
 	var (
 		args     []string

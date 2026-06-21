@@ -66,13 +66,11 @@ func TestGenerateSchema_EnumFieldInStruct(t *testing.T) {
 	AssertDeepEqual(t, []interface{}{"A", "B"}, enumSchema.Enum)
 }
 
-// TestGenerateSchema_NullableEnumFromSqlc tests enum handling with sqlc-generated nullable types
-// This simulates how enums from pkg/db/sqlc are used in structs
+// TestGenerateSchema_NullableEnumFromSqlc checks that enum fields on a sqlc-style
+// struct resolve to schema refs.
 func TestGenerateSchema_NullableEnumFromSqlc(t *testing.T) {
 	sg := NewTestSchemaGenerator()
 
-	// Simulate a struct that contains a nullable enum field (like NullBillingModel)
-	// The issue might manifest here if the code isn't properly detecting enum types
 	result := sg.GenerateSchema("openapi.Coupon")
 	if result.Ref == "" {
 		t.Fatalf("expected struct schema reference, got %+v", result)
@@ -212,15 +210,12 @@ func TestEnumReference_NotCorruptedByTags(t *testing.T) {
 	}
 }
 
-// TestEnumEdgeCase_NoConstantsFound tests what happens when an enum type has no
-// extractable constants. This might be the source of the reported bug!
+// TestEnumEdgeCase_NoConstantsFound checks that a type with no extractable enum
+// constants does not inline a bogus single-value enum.
 func TestEnumEdgeCase_NoConstantsFound(t *testing.T) {
 	sg := NewTestSchemaGenerator()
 
-	// Try to generate schema for the first field value as if it were being extracted
-	// This test checks if maybe the code is falling back to inlining a string with
-	// just one value when no enum constants are found
-
+	// TypeWithoutConstants is undefined, so this must hit the fallback path.
 	result := sg.GenerateSchema("openapi.TypeWithoutConstants")
 	if result.Ref == "" {
 		t.Fatalf("expected reference, got %+v", result)
@@ -240,11 +235,10 @@ func TestEnumEdgeCase_NoConstantsFound(t *testing.T) {
 	}
 }
 
-// TestEnumEdgeCase_RealWorldSqlcExample tests what happens with real sqlc enums
+// TestEnumEdgeCase_RealWorldSqlcExample exercises a sqlc-style string enum fixture.
 func TestEnumEdgeCase_RealWorldSqlcExample(t *testing.T) {
 	sg := NewTestSchemaGenerator()
 
-	// Test the actual DiscountType from sqlc
 	result := sg.GenerateSchema("openapi.DiscountType")
 	if result.Ref == "" {
 		t.Fatalf("expected enum reference, got %+v", result)
@@ -259,7 +253,7 @@ func TestEnumEdgeCase_RealWorldSqlcExample(t *testing.T) {
 	AssertEqual(t, "string", enumSchema.Type)
 	t.Logf("DiscountType enum values: %v", enumSchema.Enum)
 
-	// Should have exactly the two values defined in models.go
+	// Should have exactly the two DiscountType values from test_fixtures.go
 	if len(enumSchema.Enum) != 2 {
 		t.Errorf("Expected 2 DiscountType values, got %d: %v", len(enumSchema.Enum), enumSchema.Enum)
 	}

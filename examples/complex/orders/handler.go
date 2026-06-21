@@ -34,7 +34,7 @@ func (h *Handler) Register(r chi.Router) {
 	r.Patch("/{id}/status", h.UpdateStatus)
 }
 
-// List returns all orders.
+// List returns a page of orders, optionally filtered by status.
 //
 // @Summary List orders
 // @Description Return a page of orders.
