@@ -200,6 +200,7 @@ func TestSchemaGenerator_TagEnhancements(t *testing.T) {
 	t.Parallel()
 
 	sg := NewTestSchemaGenerator()
+	sg.RegisterTagHandler(validateTagHandler, bindingTagHandler)
 	_ = sg.GenerateSchema("openapi.TagExample")
 	schema := FindSchemaBySuffix(t, sg.GetSchemas(), ".TagExample")
 
@@ -241,5 +242,34 @@ func TestSchemaGenerator_TagEnhancements(t *testing.T) {
 	AssertEqual(t, "^a{2,5}$", code.Pattern)
 	if code.MinLength == nil || *code.MinLength != 2 {
 		t.Fatalf("expected code minLength=2, got %v", code.MinLength)
+	}
+}
+
+func TestSchemaGenerator_CustomTagHandlerPrecedence(t *testing.T) {
+	t.Parallel()
+
+	sg := NewTestSchemaGenerator()
+	sg.RegisterTagHandler(validateTagHandler)
+	_ = sg.GenerateSchema("openapi.TagCollision")
+	schema := FindSchemaBySuffix(t, sg.GetSchemas(), ".TagCollision")
+
+	conflict := schema.Properties["conflict"]
+	AssertEqual(t, "uuid", conflict.Format)
+
+	survives := schema.Properties["survives"]
+	if survives.MinLength == nil || *survives.MinLength != 3 {
+		t.Fatalf("expected survives minLength=3, got %v", survives.MinLength)
+	}
+}
+
+func TestSchemaGenerator_NoBuiltinValidateSupport(t *testing.T) {
+	t.Parallel()
+
+	sg := NewTestSchemaGenerator()
+	_ = sg.GenerateSchema("openapi.TagCollision")
+	schema := FindSchemaBySuffix(t, sg.GetSchemas(), ".TagCollision")
+
+	if ml := schema.Properties["survives"].MinLength; ml != nil {
+		t.Fatalf("expected validate tag to be ignored without a handler, got minLength=%v", *ml)
 	}
 }

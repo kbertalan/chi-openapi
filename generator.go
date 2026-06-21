@@ -99,6 +99,12 @@ func (g *Generator) SetModelNameFunc(f ModelNameFunc) {
 	g.modelNameFunc = f
 }
 
+// RegisterTagHandler registers custom struct-tag handlers on the underlying
+// schema generator. Call before generating the spec.
+func (g *Generator) RegisterTagHandler(handlers ...TagHandler) {
+	g.schemaGen.RegisterTagHandler(handlers...)
+}
+
 // GenerateSchema manually adds a type to the internal schema generator.
 // This is useful for including types that are not automatically discovered via routes.
 func (g *Generator) GenerateSchema(typeName string) *Schema {

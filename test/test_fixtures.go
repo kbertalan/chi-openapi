@@ -95,6 +95,13 @@ type TagExample struct {
 	Code  string  `json:"code"            openapi:"pattern=^a{2,5}$,minLength=2"`
 }
 
+// TagCollision exercises handler/openapi precedence: where both set a keyword,
+// openapi wins (Conflict); where only the handler sets one, it survives (Survives).
+type TagCollision struct {
+	Conflict string `json:"conflict" validate:"email" openapi:"format=uuid"`
+	Survives string `json:"survives" validate:"min=3"`
+}
+
 // MyEnum is a test enum representing string-based constants.
 type MyEnum string
 

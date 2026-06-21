@@ -63,7 +63,7 @@ go generate ./...   # runs cmd/openapi-gen, rewrites openapi.json
   `RegisterMiddlewareAnnotation` (it contributes the `500` response everywhere).
 - **Enum** — `orders.OrderStatus` is a string enum detected from its `const`
   block.
-- **Schema tags** — model fields carry `openapi:"…"` and `validate:"…"` tags that
+- **Schema tags** — model fields carry `openapi:"…"` tags that
   become JSON-schema constraints: `users.User`/`CreateUserRequest` get `format:
   email`, `readOnly`, `example`, `minLength`/`maxLength`; `orders.OrderItem` gets
   a `pattern` and numeric `minimum`/`maximum`/`default`.

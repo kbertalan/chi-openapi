@@ -22,14 +22,6 @@ func extractJSONTag(tag string) string {
 	return ""
 }
 
-// extractTag retrieves the value of a specific key from a struct tag string.
-// e.g. tag="validate:\"required\" json:\"foo\"", key="validate" -> "required".
-// It uses reflect.StructTag.Get so that values may contain spaces (e.g. a
-// description), which a naive space-tokenizing parser would truncate.
-func extractTag(tag, key string) string {
-	return reflect.StructTag(tag).Get(key)
-}
-
 // coerceTagValue converts a tag value to match the schema's primary type, so
 // `default=5` on an integer field emits 5, not "5". Falls back to the raw string.
 func coerceTagValue(schema *Schema, value string) any {
@@ -77,10 +69,30 @@ func splitOpenAPITagParts(tag string) []string {
 	return parts
 }
 
-// applyEnhancedTags applies OpenAPI 3.1 metadata from struct tags to a schema.
+// TagHandler applies schema metadata derived from a struct field's tag. Handlers
+// run before the built-in openapi handler, which wins on any keyword collision.
+// Register before the first GenerateSchema call; not safe to register concurrently
+// with generation.
+type TagHandler func(schema *Schema, tag reflect.StructTag)
+
+// RegisterTagHandler appends custom tag handlers, run in registration order.
+func (sg *SchemaGenerator) RegisterTagHandler(handlers ...TagHandler) {
+	sg.tagHandlers = append(sg.tagHandlers, handlers...)
+}
+
+// applyEnhancedTags runs custom handlers first, then the openapi handler last so
+// its keywords override any colliding value a handler produced.
 func (sg *SchemaGenerator) applyEnhancedTags(schema *Schema, tag string) {
-	// Parse openapi tag for enhanced features
-	if openapiTag := extractTag(tag, "openapi"); openapiTag != "" {
+	st := reflect.StructTag(tag)
+	for _, h := range sg.tagHandlers {
+		h(schema, st)
+	}
+	applyOpenAPITag(schema, st)
+}
+
+// applyOpenAPITag applies OpenAPI 3.1 metadata from the `openapi` struct tag.
+func applyOpenAPITag(schema *Schema, tag reflect.StructTag) {
+	if openapiTag := tag.Get("openapi"); openapiTag != "" {
 		parts := splitOpenAPITagParts(openapiTag)
 		for _, part := range parts {
 			part = strings.TrimSpace(part)
@@ -160,96 +172,6 @@ func (sg *SchemaGenerator) applyEnhancedTags(schema *Schema, tag string) {
 					schema.Default = coerceTagValue(schema, value)
 				}
 			}
-		}
-	}
-
-	// Parse validate tag for additional constraints
-	if validateTag := extractTag(tag, "validate"); validateTag != "" {
-		parts := strings.Split(validateTag, ",")
-		for _, part := range parts {
-			part = strings.TrimSpace(part)
-			switch {
-			case part == "email":
-				schema.Format = "email"
-			case part == "uuid":
-				schema.Format = "uuid"
-			case part == "uri", part == "url":
-				schema.Format = "uri"
-			case strings.HasPrefix(part, "min="):
-				val := strings.TrimPrefix(part, "min=")
-				if hasType(schema, "integer") || hasType(schema, "number") {
-					if min, err := strconv.ParseFloat(val, 64); err == nil {
-						schema.Minimum = &min
-					}
-				} else if hasType(schema, "string") {
-					if m, err := strconv.Atoi(val); err == nil {
-						schema.MinLength = &m
-					}
-				} else if hasType(schema, "array") {
-					if m, err := strconv.Atoi(val); err == nil {
-						schema.MinItems = &m
-					}
-				}
-			case strings.HasPrefix(part, "max="):
-				val := strings.TrimPrefix(part, "max=")
-				if hasType(schema, "integer") || hasType(schema, "number") {
-					if max, err := strconv.ParseFloat(val, 64); err == nil {
-						schema.Maximum = &max
-					}
-				} else if hasType(schema, "string") {
-					if m, err := strconv.Atoi(val); err == nil {
-						schema.MaxLength = &m
-					}
-				} else if hasType(schema, "array") {
-					if m, err := strconv.Atoi(val); err == nil {
-						schema.MaxItems = &m
-					}
-				}
-			case strings.HasPrefix(part, "exclusiveMin="):
-				val := strings.TrimPrefix(part, "exclusiveMin=")
-				if hasType(schema, "integer") || hasType(schema, "number") {
-					if min, err := strconv.ParseFloat(val, 64); err == nil {
-						schema.ExclusiveMinimum = &min
-					}
-				}
-			case strings.HasPrefix(part, "exclusiveMax="):
-				val := strings.TrimPrefix(part, "exclusiveMax=")
-				if hasType(schema, "integer") || hasType(schema, "number") {
-					if max, err := strconv.ParseFloat(val, 64); err == nil {
-						schema.ExclusiveMaximum = &max
-					}
-				}
-			case strings.HasPrefix(part, "len="):
-				val := strings.TrimPrefix(part, "len=")
-				if hasType(schema, "string") {
-					if m, err := strconv.Atoi(val); err == nil {
-						schema.MinLength = &m
-						schema.MaxLength = &m
-					}
-				} else if hasType(schema, "array") {
-					if m, err := strconv.Atoi(val); err == nil {
-						schema.MinItems = &m
-						schema.MaxItems = &m
-					}
-				}
-			case strings.HasPrefix(part, "oneof="):
-				val := strings.TrimPrefix(part, "oneof=")
-				vals := strings.Split(val, " ")
-				schema.Enum = make([]interface{}, len(vals))
-				for i, v := range vals {
-					schema.Enum[i] = v
-				}
-			}
-		}
-	}
-
-	// Parse binding tag for additional format hints
-	if bindingTag := extractTag(tag, "binding"); bindingTag != "" {
-		if strings.Contains(bindingTag, "email") {
-			schema.Format = "email"
-		}
-		if strings.Contains(bindingTag, "uuid") {
-			schema.Format = "uuid"
 		}
 	}
 }

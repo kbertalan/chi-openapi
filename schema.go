@@ -11,9 +11,10 @@ import (
 // SchemaGenerator handles dynamic schema generation from Go types
 // If a TypeIndex is provided, it will be used for fast lookup.
 type SchemaGenerator struct {
-	schemas   map[string]*Schema
-	typeIndex *TypeIndex
-	mutex     sync.Mutex
+	schemas     map[string]*Schema
+	typeIndex   *TypeIndex
+	tagHandlers []TagHandler
+	mutex       sync.Mutex
 }
 
 // genCtx carries the per-call-stack context for schema generation: the package
