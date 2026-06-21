@@ -148,14 +148,25 @@ type PaginatedResponse[T any] struct {
 
 Declare schemes in `Config`; every scheme referenced by a `@Security` directive must be declared or generation fails.
 
+The `security` package builds each scheme type with its required fields filled in (`apiKey` needs `name`/`in`, `oauth2` needs `flows`, etc.):
+
 ```go
 openapi.Config{
 	SecuritySchemes: map[string]openapi.SecurityScheme{
-		"ApiKeyAuth": {Type: "apiKey", Description: "API key in X-API-Key header"},
-		"BearerAuth": {Type: "http", Scheme: "bearer", BearerFormat: "JWT"},
+		"ApiKeyAuth": security.APIKey("X-API-Key", security.InHeader,
+			security.WithDescription("API key in X-API-Key header")),
+		"BearerAuth": security.Bearer("JWT"),
+		"OIDC":       security.OpenIDConnect("https://issuer.example.com/.well-known/openid-configuration"),
+		"OAuth2": security.OAuth2(openapi.OAuthFlows{
+			AuthorizationCode: security.AuthorizationCodeFlow(
+				"https://example.com/authorize", "https://example.com/token",
+				map[string]string{"read": "Read access", "write": "Write access"}),
+		}),
 	},
 }
 ```
+
+`SecurityScheme` literals still work; the constructors (`APIKey`, `HTTP`, `Basic`, `Bearer`, `MutualTLS`, `OpenIDConnect`, `OAuth2`) just set the right fields per type.
 
 Annotations on a **named middleware function** merge into every operation it guards.
 

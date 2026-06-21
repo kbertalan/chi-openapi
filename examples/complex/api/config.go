@@ -1,6 +1,9 @@
 package api
 
-import openapi "github.com/kbertalan/chi-openapi"
+import (
+	openapi "github.com/kbertalan/chi-openapi"
+	"github.com/kbertalan/chi-openapi/security"
+)
 
 // Config returns the static OpenAPI metadata for the service. Every security
 // scheme referenced by a @Security annotation must be declared here, or
@@ -17,8 +20,9 @@ func Config() openapi.Config {
 			{URL: "http://localhost:8080", Description: "Local development"},
 		},
 		SecuritySchemes: map[string]openapi.SecurityScheme{
-			"ApiKeyAuth": {Type: "apiKey", Description: "API key sent in the X-API-Key header"},
-			"BearerAuth": {Type: "http", Scheme: "bearer", BearerFormat: "JWT"},
+			"ApiKeyAuth": security.APIKey("X-API-Key", security.InHeader,
+				security.WithDescription("API key sent in the X-API-Key header")),
+			"BearerAuth": security.Bearer("JWT"),
 		},
 	}
 }

@@ -245,10 +245,31 @@ type SecurityRequirement map[string][]string
 
 // SecurityScheme represents a security scheme configuration.
 type SecurityScheme struct {
-	Type         string `json:"type"`
-	Scheme       string `json:"scheme,omitempty"`
-	BearerFormat string `json:"bearerFormat,omitempty"`
-	Description  string `json:"description,omitempty"`
+	Type             string      `json:"type"` // apiKey, http, mutualTLS, oauth2 or openIdConnect
+	Description      string      `json:"description,omitempty"`
+	Name             string      `json:"name,omitempty"`         // apiKey
+	In               string      `json:"in,omitempty"`           // apiKey: query, header or cookie
+	Scheme           string      `json:"scheme,omitempty"`       // http
+	BearerFormat     string      `json:"bearerFormat,omitempty"` // http bearer
+	Flows            *OAuthFlows `json:"flows,omitempty"`        // oauth2
+	OpenIdConnectURL string      `json:"openIdConnectUrl,omitempty"`
+}
+
+// OAuthFlows lists the OAuth2 flows supported by a security scheme.
+type OAuthFlows struct {
+	Implicit          *OAuthFlow `json:"implicit,omitempty"`
+	Password          *OAuthFlow `json:"password,omitempty"`
+	ClientCredentials *OAuthFlow `json:"clientCredentials,omitempty"`
+	AuthorizationCode *OAuthFlow `json:"authorizationCode,omitempty"`
+}
+
+// OAuthFlow configures a single OAuth2 flow. Scopes is required, so it is
+// serialized even when empty.
+type OAuthFlow struct {
+	AuthorizationURL string            `json:"authorizationUrl,omitempty"`
+	TokenURL         string            `json:"tokenUrl,omitempty"`
+	RefreshURL       string            `json:"refreshUrl,omitempty"`
+	Scopes           map[string]string `json:"scopes"`
 }
 
 // Tag represents an OpenAPI tag entry.

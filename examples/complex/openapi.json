@@ -898,7 +898,9 @@
     "securitySchemes": {
       "ApiKeyAuth": {
         "type": "apiKey",
-        "description": "API key sent in the X-API-Key header"
+        "description": "API key sent in the X-API-Key header",
+        "name": "X-API-Key",
+        "in": "header"
       },
       "BearerAuth": {
         "type": "http",
