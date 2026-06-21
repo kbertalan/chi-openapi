@@ -250,15 +250,36 @@ func extractPathParameters(route string) []Parameter {
 }
 
 // generateOperationID creates a stable operation ID based on method and route.
+// Path parameters become "By<Name>" segments so routes differing only by a
+// parameter (e.g. /orders vs /orders/{id}) get distinct IDs.
 func generateOperationID(method, route string) string {
 	var cleanParts []string
 	for _, part := range strings.Split(strings.Trim(route, "/"), "/") {
-		if part == "" || strings.Contains(part, "{") {
+		if part == "" {
+			continue
+		}
+		if strings.HasPrefix(part, "{") {
+			name := strings.Trim(part, "{}")
+			if i := strings.IndexByte(name, ':'); i >= 0 {
+				name = name[:i] // drop chi regex constraint, e.g. {id:[0-9]+}
+			}
+			cleanParts = append(cleanParts, "By"+capitalize(name))
 			continue
 		}
 		cleanParts = append(cleanParts, capitalize(part))
 	}
 	return strings.ToLower(method) + strings.Join(cleanParts, "")
+}
+
+// dedupeOperationID appends a numeric suffix on collision, guaranteeing
+// uniqueness across the document.
+func dedupeOperationID(id string, used map[string]bool) string {
+	candidate := id
+	for i := 2; used[candidate]; i++ {
+		candidate = id + strconv.Itoa(i)
+	}
+	used[candidate] = true
+	return candidate
 }
 
 // capitalize upper-cases the first rune of s.

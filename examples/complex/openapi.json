@@ -201,7 +201,7 @@
           "orders"
         ],
         "summary": "Get an order",
-        "operationId": "getOrders",
+        "operationId": "getOrdersById",
         "parameters": [
           {
             "name": "id",
@@ -276,7 +276,7 @@
           "orders"
         ],
         "summary": "Update order status",
-        "operationId": "patchOrdersStatus",
+        "operationId": "patchOrdersByIdStatus",
         "parameters": [
           {
             "name": "id",
@@ -516,7 +516,7 @@
           "users"
         ],
         "summary": "Get a user",
-        "operationId": "getUsers",
+        "operationId": "getUsersById",
         "parameters": [
           {
             "name": "id",
@@ -589,7 +589,7 @@
           "users"
         ],
         "summary": "Delete a user",
-        "operationId": "deleteUsers",
+        "operationId": "deleteUsersById",
         "parameters": [
           {
             "name": "id",
