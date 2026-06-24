@@ -14,7 +14,7 @@ var (
 	expectedTestBusinessObject = openapi.Schema{
 		Type: "object",
 		Properties: map[string]*openapi.Schema{
-			"id":   {Type: "integer", Format: "int"},
+			"id":   {Type: "integer", Format: "int64"},
 			"name": {Type: "string"},
 		},
 		Required: []string{"id", "name"},
@@ -23,8 +23,8 @@ var (
 	expectedTestPageInfo = openapi.Schema{
 		Type: "object",
 		Properties: map[string]*openapi.Schema{
-			"currentPage": {Type: "integer", Format: "int"},
-			"totalPages":  {Type: "integer", Format: "int"},
+			"currentPage": {Type: "integer", Format: "int64"},
+			"totalPages":  {Type: "integer", Format: "int64"},
 		},
 		Required: []string{"currentPage", "totalPages"},
 	}

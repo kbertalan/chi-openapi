@@ -390,7 +390,7 @@
             "description": "Maximum number of users to return",
             "schema": {
               "type": "integer",
-              "format": "int"
+              "format": "int64"
             }
           }
         ],
@@ -677,7 +677,7 @@
         "properties": {
           "code": {
             "type": "integer",
-            "format": "int"
+            "format": "int64"
           },
           "message": {
             "type": "string"
@@ -743,7 +743,7 @@
         "properties": {
           "quantity": {
             "type": "integer",
-            "format": "int",
+            "format": "int64",
             "minimum": 1,
             "maximum": 999,
             "default": 1
@@ -793,15 +793,15 @@
           },
           "page": {
             "type": "integer",
-            "format": "int"
+            "format": "int64"
           },
           "pageSize": {
             "type": "integer",
-            "format": "int"
+            "format": "int64"
           },
           "totalItems": {
             "type": "integer",
-            "format": "int"
+            "format": "int64"
           }
         },
         "required": [
@@ -822,15 +822,15 @@
           },
           "page": {
             "type": "integer",
-            "format": "int"
+            "format": "int64"
           },
           "pageSize": {
             "type": "integer",
-            "format": "int"
+            "format": "int64"
           },
           "totalItems": {
             "type": "integer",
-            "format": "int"
+            "format": "int64"
           }
         },
         "required": [

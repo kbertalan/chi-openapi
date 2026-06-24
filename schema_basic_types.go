@@ -6,7 +6,6 @@ import (
 )
 
 // mapGoTypeToOpenAPI maps a Go type name to an OpenAPI primitive type and format.
-// int64/uint64 map to "string" because JSON numbers lose precision beyond 2^53-1.
 func mapGoTypeToOpenAPI(typeName string) (string, string) {
 	switch typeName {
 	case "int8":
@@ -16,7 +15,7 @@ func mapGoTypeToOpenAPI(typeName string) (string, string) {
 	case "int32":
 		return "integer", "int32"
 	case "int64":
-		return "string", "int64"
+		return "integer", "int64"
 	case "uint8", "byte":
 		return "integer", "uint32"
 	case "uint16":
@@ -26,7 +25,7 @@ func mapGoTypeToOpenAPI(typeName string) (string, string) {
 	case "uint64":
 		return "string", "uint64"
 	case "int":
-		return "integer", "int"
+		return "integer", "int64"
 	case "uint":
 		return "integer", "uint"
 	case "float32":
