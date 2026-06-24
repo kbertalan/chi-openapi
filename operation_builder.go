@@ -234,6 +234,24 @@ func convertRouteToOpenAPIPath(route string) string {
 	return strings.Join(parts, "/")
 }
 
+// stripTrailingSlashIfSafe drops a trailing "/" unless: the path is the root
+// "/", or another registered path already equals the stripped form (which
+// would collapse two distinct routes into one entry).
+func stripTrailingSlashIfSafe(p string, registered map[string]bool) string {
+	if len(p) <= 1 || !strings.HasSuffix(p, "/") {
+		return p
+	}
+	stripped := strings.TrimSuffix(p, "/")
+	if registered[stripped] {
+		slog.Warn(
+			"[openapi] trailing-slash route collides with sibling; keeping slashed form",
+			"path", p, "sibling", stripped,
+		)
+		return p
+	}
+	return stripped
+}
+
 // extractPathParameters converts route parameters into OpenAPI parameters.
 func extractPathParameters(route string) []Parameter {
 	var params []Parameter

@@ -157,10 +157,15 @@ func (g *Generator) GenerateSpec(router chi.Router, cfg Config) (Spec, error) {
 		slog.Warn("[openapi] GenerateSpec: InspectRoutes error", "error", err)
 	}
 
+	registeredPaths := make(map[string]bool, len(routes))
+	for _, ri := range routes {
+		registeredPaths[convertRouteToOpenAPIPath(ri.Pattern)] = true
+	}
+
 	for _, ri := range routes {
 		method := ri.Method
 		route := ri.Pattern
-		pathKey := convertRouteToOpenAPIPath(route)
+		pathKey := stripTrailingSlashIfSafe(convertRouteToOpenAPIPath(route), registeredPaths)
 
 		operation := g.buildOperation(ri)
 		operation.OperationID = dedupeOperationID(operation.OperationID, usedOperationIDs)

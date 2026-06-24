@@ -262,18 +262,18 @@ func TestGenerateSpec_MenuCouponCollision(t *testing.T) {
 		t.Fatalf("GenerateSpec error: %v", err)
 	}
 
-	// Check that both paths exist
+	// Trailing slashes are stripped (no sibling collisions here).
 	paths := spec.Paths
-	if _, ok := paths["/api/v1/menu/"]; !ok {
-		t.Fatalf("expected path '/api/v1/menu/' in spec.Paths")
+	if _, ok := paths["/api/v1/menu"]; !ok {
+		t.Fatalf("expected path '/api/v1/menu' in spec.Paths")
 	}
-	if _, ok := paths["/api/v1/coupon/"]; !ok {
-		t.Fatalf("expected path '/api/v1/coupon/' in spec.Paths")
+	if _, ok := paths["/api/v1/coupon"]; !ok {
+		t.Fatalf("expected path '/api/v1/coupon' in spec.Paths")
 	}
 
 	// Get the operations
-	menuOps := paths["/api/v1/menu/"]
-	couponOps := paths["/api/v1/coupon/"]
+	menuOps := paths["/api/v1/menu"]
+	couponOps := paths["/api/v1/coupon"]
 
 	// Check GET operations exist
 	menuGet := menuOps.Get
@@ -582,6 +582,95 @@ func TestGenerateSpec_ResponseTypesRegistered(t *testing.T) {
 func schemaKeys(spec openapi.Spec) []string {
 	keys := make([]string, 0, len(spec.Components.Schemas))
 	for k := range spec.Components.Schemas {
+		keys = append(keys, k)
+	}
+	return keys
+}
+
+// TestGenerateSpec_TrailingSlash_MountSubrouterRootStripped verifies that a
+// chi Mount + subrouter Get("/") (walked as "/v1/categories/") is emitted as
+// "/v1/categories" — chi serves both forms, so the trailing slash is a
+// representation artifact and OpenAPI convention drops it.
+func TestGenerateSpec_TrailingSlash_MountSubrouterRootStripped(t *testing.T) {
+	sub := chi.NewRouter()
+	sub.Get("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	r := chi.NewRouter()
+	r.Mount("/v1/categories", sub)
+
+	cfg := openapi.Config{Info: openapi.Info{Title: "Test", Version: "1.0.0"}}
+	spec, err := openapi.NewGenerator().GenerateSpec(r, cfg)
+	if err != nil {
+		t.Fatalf("GenerateSpec error: %v", err)
+	}
+	if _, ok := spec.Paths["/v1/categories"]; !ok {
+		t.Errorf("expected '/v1/categories' in paths, got %v", pathKeys(spec))
+	}
+	if _, ok := spec.Paths["/v1/categories/"]; ok {
+		t.Errorf("did not expect '/v1/categories/' in paths, got %v", pathKeys(spec))
+	}
+}
+
+// TestGenerateSpec_TrailingSlash_RootUnchanged verifies that the root "/" is
+// never stripped (an empty path string is invalid in OpenAPI).
+func TestGenerateSpec_TrailingSlash_RootUnchanged(t *testing.T) {
+	r := chi.NewRouter()
+	r.Get("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+
+	cfg := openapi.Config{Info: openapi.Info{Title: "Test", Version: "1.0.0"}}
+	spec, err := openapi.NewGenerator().GenerateSpec(r, cfg)
+	if err != nil {
+		t.Fatalf("GenerateSpec error: %v", err)
+	}
+	if _, ok := spec.Paths["/"]; !ok {
+		t.Errorf("expected '/' in paths, got %v", pathKeys(spec))
+	}
+}
+
+// TestGenerateSpec_TrailingSlash_CollisionPreservesBoth verifies that when
+// both "/foo/" and "/foo" are explicitly registered, the trailing-slash form
+// is preserved — collapsing them would lose a distinct registered route.
+func TestGenerateSpec_TrailingSlash_CollisionPreservesBoth(t *testing.T) {
+	r := chi.NewRouter()
+	r.Get("/foo", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	r.Get("/foo/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+
+	cfg := openapi.Config{Info: openapi.Info{Title: "Test", Version: "1.0.0"}}
+	spec, err := openapi.NewGenerator().GenerateSpec(r, cfg)
+	if err != nil {
+		t.Fatalf("GenerateSpec error: %v", err)
+	}
+	if _, ok := spec.Paths["/foo"]; !ok {
+		t.Errorf("expected '/foo' in paths, got %v", pathKeys(spec))
+	}
+	if _, ok := spec.Paths["/foo/"]; !ok {
+		t.Errorf("expected '/foo/' in paths (collision preserves both), got %v", pathKeys(spec))
+	}
+}
+
+// TestGenerateSpec_TrailingSlash_LiteralStrippedWhenNoSibling documents that a
+// literally-registered "/foo/" with no "/foo" sibling is still stripped to
+// "/foo". The three rules in the strip helper don't distinguish literal
+// trailing slashes from Mount-walk artifacts — this behavior is intentional.
+func TestGenerateSpec_TrailingSlash_LiteralStrippedWhenNoSibling(t *testing.T) {
+	r := chi.NewRouter()
+	r.Get("/foo/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+
+	cfg := openapi.Config{Info: openapi.Info{Title: "Test", Version: "1.0.0"}}
+	spec, err := openapi.NewGenerator().GenerateSpec(r, cfg)
+	if err != nil {
+		t.Fatalf("GenerateSpec error: %v", err)
+	}
+	if _, ok := spec.Paths["/foo"]; !ok {
+		t.Errorf("expected '/foo' in paths, got %v", pathKeys(spec))
+	}
+	if _, ok := spec.Paths["/foo/"]; ok {
+		t.Errorf("did not expect '/foo/' in paths, got %v", pathKeys(spec))
+	}
+}
+
+func pathKeys(spec openapi.Spec) []string {
+	keys := make([]string, 0, len(spec.Paths))
+	for k := range spec.Paths {
 		keys = append(keys, k)
 	}
 	return keys

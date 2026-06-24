@@ -203,6 +203,10 @@ g.RegisterMiddlewareAnnotation(middleware.Recoverer, &openapi.Annotation{
 })
 ```
 
+## Trailing slashes
+
+chi walks `Mount("/v1/categories", sub)` + subrouter `Get("/")` as `/v1/categories/`, even though chi serves both forms. The generator strips that trailing `/` so the spec uses the OpenAPI convention. The root `/` is never stripped, and if `/foo` and `/foo/` are both explicitly registered, both are emitted and a warning is logged.
+
 ## When routes or handlers aren't discovered
 
 chi-openapi walks the router via chi.Walk, then reads each handler's annotations by

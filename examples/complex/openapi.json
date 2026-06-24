@@ -49,7 +49,7 @@
         }
       }
     },
-    "/orders/": {
+    "/orders": {
       "get": {
         "tags": [
           "orders"
@@ -366,7 +366,7 @@
         ]
       }
     },
-    "/users/": {
+    "/users": {
       "get": {
         "tags": [
           "users"
@@ -912,15 +912,15 @@
   "tags": [
     {
       "name": "orders",
-      "description": "Orders related operations"
+      "description": "Order placement and lookup"
     },
     {
       "name": "system",
-      "description": "System related operations"
+      "description": "Service health and metadata"
     },
     {
       "name": "users",
-      "description": "Users related operations"
+      "description": "User accounts and profiles"
     }
   ]
 }
