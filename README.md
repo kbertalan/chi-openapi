@@ -168,6 +168,19 @@ openapi.Config{
 
 `SecurityScheme` literals still work; the constructors (`APIKey`, `HTTP`, `Basic`, `Bearer`, `MutualTLS`, `OpenIDConnect`, `OAuth2`) just set the right fields per type.
 
+## Tags
+
+`Config.Tags` is optional. When provided, declared descriptions replace the auto-generated default for any matching `@Tags` name; undeclared tags still work and fall back to the default.
+
+```go
+openapi.Config{
+	Tags: []openapi.Tag{
+		{Name: "users", Description: "User accounts and profiles"},
+		{Name: "orders", Description: "Order placement and lookup"},
+	},
+}
+```
+
 Annotations on a **named middleware function** merge into every operation it guards.
 
 ```go

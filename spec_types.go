@@ -6,6 +6,8 @@ type Config struct {
 	Info            Info                      // Required: API metadata (Title and Version are mandatory)
 	Servers         []Server                  // Optional: List of API servers
 	SecuritySchemes map[string]SecurityScheme // Optional: security scheme definitions
+	// Tags, when non-empty, constrains @Tags names to those declared here.
+	Tags []Tag
 	// SkipRoutes excludes routes whose pattern contains any listed substring.
 	// nil uses the default documentation routes; an empty slice skips nothing.
 	SkipRoutes []string
@@ -13,8 +15,8 @@ type Config struct {
 
 // Contact represents contact information for the API.
 type Contact struct {
-	Name  string `json:"name,omitempty"`   // Contact name
-	URL   string `json:"url,omitempty"`    // Contact URL
+	Name  string `json:"name,omitempty"`  // Contact name
+	URL   string `json:"url,omitempty"`   // Contact URL
 	Email string `json:"email,omitempty"` // Contact email address
 }
 

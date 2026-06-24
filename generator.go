@@ -216,7 +216,7 @@ func (g *Generator) GenerateSpec(router chi.Router, cfg Config) (Spec, error) {
 		)
 	}
 
-	spec.Tags = g.buildTags(tags)
+	spec.Tags = g.buildTags(tags, cfg.Tags)
 
 	// Post-process schemas to apply the naming strategy and resolve conflicts
 	g.finalizeSchemas(&spec)

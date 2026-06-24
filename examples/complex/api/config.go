@@ -24,5 +24,10 @@ func Config() openapi.Config {
 				security.WithDescription("API key sent in the X-API-Key header")),
 			"BearerAuth": security.Bearer("JWT"),
 		},
+		Tags: []openapi.Tag{
+			{Name: "users", Description: "User accounts and profiles"},
+			{Name: "orders", Description: "Order placement and lookup"},
+			{Name: "system", Description: "Service health and metadata"},
+		},
 	}
 }

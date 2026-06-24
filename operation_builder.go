@@ -194,15 +194,25 @@ func (g *Generator) buildRequestBody(annotations *Annotation) *RequestBody {
 	}
 }
 
-// buildTags produces tag entries sorted for determinism.
-func (g *Generator) buildTags(tagNames map[string]bool) []Tag {
+// buildTags produces tag entries sorted for determinism, preferring
+// descriptions from declared over the default.
+func (g *Generator) buildTags(tagNames map[string]bool, declared []Tag) []Tag {
 	slog.Debug("[openapi] buildTags: called", "tag_count", len(tagNames))
+
+	descriptions := make(map[string]string, len(declared))
+	for _, t := range declared {
+		descriptions[t.Name] = t.Description
+	}
 
 	var tags []Tag
 	for name := range tagNames {
+		desc, ok := descriptions[name]
+		if !ok {
+			desc = capitalize(name) + " related operations"
+		}
 		tags = append(tags, Tag{
 			Name:        name,
-			Description: capitalize(name) + " related operations",
+			Description: desc,
 		})
 	}
 
