@@ -13,9 +13,9 @@ type Config struct {
 
 // Contact represents contact information for the API.
 type Contact struct {
-	Name  string // Contact name
-	URL   string // Contact URL
-	Email string // Contact email address
+	Name  string `json:"name,omitempty"`   // Contact name
+	URL   string `json:"url,omitempty"`    // Contact URL
+	Email string `json:"email,omitempty"` // Contact email address
 }
 
 // License represents license information for the API.
