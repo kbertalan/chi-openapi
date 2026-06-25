@@ -91,13 +91,28 @@ type Operation struct {
 	Servers      []Server               `json:"servers,omitempty"`
 }
 
+// ParameterStyle is an OpenAPI 3.1 parameter serialization style.
+type ParameterStyle string
+
+const (
+	ParameterStyleMatrix         ParameterStyle = "matrix"
+	ParameterStyleLabel          ParameterStyle = "label"
+	ParameterStyleForm           ParameterStyle = "form"
+	ParameterStyleSimple         ParameterStyle = "simple"
+	ParameterStyleSpaceDelimited ParameterStyle = "spaceDelimited"
+	ParameterStylePipeDelimited  ParameterStyle = "pipeDelimited"
+	ParameterStyleDeepObject     ParameterStyle = "deepObject"
+)
+
 // Parameter describes a path/query/header parameter.
 type Parameter struct {
-	Name        string  `json:"name"`
-	In          string  `json:"in"`
-	Description string  `json:"description,omitempty"`
-	Required    bool    `json:"required,omitempty"`
-	Schema      *Schema `json:"schema,omitempty"`
+	Name        string         `json:"name"`
+	In          string         `json:"in"`
+	Description string         `json:"description,omitempty"`
+	Required    bool           `json:"required,omitempty"`
+	Style       ParameterStyle `json:"style,omitempty"`
+	Explode     *bool          `json:"explode,omitempty"`
+	Schema      *Schema        `json:"schema,omitempty"`
 }
 
 // RequestBody describes an HTTP request payload.

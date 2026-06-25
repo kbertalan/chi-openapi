@@ -244,6 +244,79 @@ func TestGenerateSpecRoutes_GenericReceiver(t *testing.T) {
 	}
 }
 
+// listIDs exposes a query parameter with explicit style and explode overrides
+// so the generator emits the OpenAPI 3.1 serialization controls.
+//
+// @Summary List by ids
+// @Param ids query []string false "Filter by ids" form false
+func listIDs(w http.ResponseWriter, r *http.Request) {}
+
+func TestGenerateSpec_ParameterStyleExplode(t *testing.T) {
+	r := chi.NewRouter()
+	r.Get("/things", listIDs)
+
+	cfg := openapi.Config{Info: openapi.Info{Title: "Test", Version: "1.0.0"}}
+	g := openapi.NewGenerator()
+	spec, err := g.GenerateSpec(r, cfg)
+	if err != nil {
+		t.Fatalf("GenerateSpec error: %v", err)
+	}
+
+	op := spec.Paths["/things"].Get
+	if op == nil {
+		t.Fatalf("expected GET /things")
+	}
+
+	var got openapi.Parameter
+	for _, p := range op.Parameters {
+		if p.Name == "ids" {
+			got = p
+			break
+		}
+	}
+	if got.Name != "ids" {
+		t.Fatalf("expected ids parameter, got %+v", op.Parameters)
+	}
+	if got.Style != "form" {
+		t.Errorf("expected style 'form', got %q", got.Style)
+	}
+	if got.Explode == nil || *got.Explode != false {
+		t.Errorf("expected explode=false, got %v", got.Explode)
+	}
+}
+
+// listBadStyle uses a style that is invalid for in=query (matrix is path-only).
+// The generator should drop style rather than emit an invalid
+// document, and log a warning.
+//
+// @Summary List bad
+// @Param ids query []string false "Bad style" matrix
+func listBadStyle(w http.ResponseWriter, r *http.Request) {}
+
+func TestGenerateSpec_ParameterStyleValidationDrops(t *testing.T) {
+	r := chi.NewRouter()
+	r.Get("/bad", listBadStyle)
+
+	cfg := openapi.Config{Info: openapi.Info{Title: "Test", Version: "1.0.0"}}
+	g := openapi.NewGenerator()
+	spec, err := g.GenerateSpec(r, cfg)
+	if err != nil {
+		t.Fatalf("GenerateSpec error: %v", err)
+	}
+
+	op := spec.Paths["/bad"].Get
+	var got openapi.Parameter
+	for _, p := range op.Parameters {
+		if p.Name == "ids" {
+			got = p
+			break
+		}
+	}
+	if got.Style != "" {
+		t.Errorf("expected style to be dropped, got %q", got.Style)
+	}
+}
+
 // TestGenerateSpec_MenuCouponCollision tests the exact scenario where menu and coupon
 // handlers both have "List" method names, ensuring they get distinct summaries.
 func TestGenerateSpec_MenuCouponCollision(t *testing.T) {

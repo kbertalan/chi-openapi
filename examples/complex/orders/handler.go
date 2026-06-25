@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -34,17 +35,24 @@ func (h *Handler) Register(r chi.Router) {
 	r.Patch("/{id}/status", h.UpdateStatus)
 }
 
-// List returns a page of orders, optionally filtered by status.
+// List returns a page of orders, optionally filtered by status and ids.
 //
 // @Summary List orders
 // @Description Return a page of orders.
 // @Tags orders
 // @Param status query string false "Filter by status"
+// @Param ids query []string false "Filter by ids (CSV)" form false
 // @Success 200 PaginatedResponse[orders.Order] "page of matching orders"
 // @Failure 500 ErrorResponse "internal error"
 // @See https://example.com/docs/orders "Orders guide"
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	want := OrderStatus(r.URL.Query().Get("status"))
+	wantIDs := map[string]bool{}
+	for id := range strings.SplitSeq(r.URL.Query().Get("ids"), ",") {
+		if id != "" {
+			wantIDs[id] = true
+		}
+	}
 
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -52,6 +60,9 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	items := make([]Order, 0, len(h.orders))
 	for _, o := range h.orders {
 		if want != "" && o.Status != want {
+			continue
+		}
+		if len(wantIDs) > 0 && !wantIDs[o.ID] {
 			continue
 		}
 		items = append(items, o)

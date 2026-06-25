@@ -1,8 +1,10 @@
 package openapi
 
 import (
+	"fmt"
 	"log/slog"
 	"net/http"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -65,11 +67,23 @@ func (g *Generator) buildOperation(ri RouteInfo) Operation {
 			if param.In == "body" {
 				continue
 			}
+			style, err := resolveParameterStyle(param)
+			if err != nil {
+				slog.Warn(
+					"[openapi] buildOperation: invalid @Param style",
+					"name", param.Name,
+					"in", param.In,
+					"operationId", op.OperationID,
+					"error", err,
+				)
+			}
 			op.Parameters = upsertParameter(op.Parameters, Parameter{
 				Name:        param.Name,
 				In:          param.In,
 				Description: param.Description,
 				Required:    param.Required,
+				Style:       style,
+				Explode:     param.Explode,
 				Schema:      g.schemaGen.GenerateSchema(param.Type),
 			})
 		}
@@ -319,6 +333,32 @@ func capitalize(s string) string {
 	return string(unicode.ToUpper(r)) + s[size:]
 }
 
+// parameterStyleAllowedIn lists the `in` locations each OpenAPI 3.1
+// serialization style is valid for.
+var parameterStyleAllowedIn = map[ParameterStyle][]string{
+	ParameterStyleMatrix:         {"path"},
+	ParameterStyleLabel:          {"path"},
+	ParameterStyleForm:           {"query", "cookie"},
+	ParameterStyleSimple:         {"path", "header"},
+	ParameterStyleSpaceDelimited: {"query"},
+	ParameterStylePipeDelimited:  {"query"},
+	ParameterStyleDeepObject:     {"query"},
+}
+
+// resolveParameterStyle validates the (style, in) pair from a @Param annotation.
+func resolveParameterStyle(p ParamAnnotation) (ParameterStyle, error) {
+	if p.Style != "" {
+		allowed, ok := parameterStyleAllowedIn[p.Style]
+		if !ok {
+			return "", fmt.Errorf("unknown style %q", p.Style)
+		}
+		if !slices.Contains(allowed, p.In) {
+			return "", fmt.Errorf("style %q is not allowed for in=%q (allowed: %s)", p.Style, p.In, strings.Join(allowed, ", "))
+		}
+	}
+	return p.Style, nil
+}
+
 // upsertParameter merges a parameter into an existing slice.
 func upsertParameter(params []Parameter, p Parameter) []Parameter {
 	for i, existing := range params {
@@ -331,6 +371,12 @@ func upsertParameter(params []Parameter, p Parameter) []Parameter {
 		}
 		if p.Required {
 			existing.Required = true
+		}
+		if p.Style != "" {
+			existing.Style = p.Style
+		}
+		if p.Explode != nil {
+			existing.Explode = p.Explode
 		}
 		if p.Schema != nil {
 			existing.Schema = p.Schema

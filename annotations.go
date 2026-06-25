@@ -53,6 +53,8 @@ type ParamAnnotation struct {
 	Type        string
 	Required    bool
 	Description string
+	Style       ParameterStyle
+	Explode     *bool
 }
 
 type ErrorResponse struct {

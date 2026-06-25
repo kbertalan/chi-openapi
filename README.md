@@ -64,13 +64,30 @@ Directives live in the handler's doc comment.
 | `@Description` | `@Description <text>` | Long description |
 | `@Tags` | `@Tags <a> <b>` | Group operations |
 | `@Accept` | `@Accept <mime>` | Request content type |
-| `@Param` | `@Param <name> <in> <type> <required> "<desc>"` | Path/query/header/body parameter |
+| `@Param` | `@Param <name> <in> <type> <required> "<desc>" [<style> <explode>]` | Path/query/header/body parameter |
 | `@Success` | `@Success <code> <Type> "<desc>"` | Success response + body type |
 | `@Failure` | `@Failure <code> <Type> "<desc>"` | Error response + body type |
 | `@Security` | `@Security <scheme>` | Require a security scheme |
 | `@See` | `@See <url> "<desc>"` | Link to external docs |
 
 `<in>` is one of `path`, `query`, `header`, `body`. A `body` param names the request body type.
+
+`<style>` and `<explode>` are optional OpenAPI 3.1 serialization controls. Omit them to use the
+OpenAPI defaults for the parameter's `in`. The allowed `<style>` values per `in` are:
+
+| `in` | Allowed `<style>` |
+| --- | --- |
+| `path` | `matrix`, `label`, `simple` |
+| `query` | `form`, `spaceDelimited`, `pipeDelimited`, `deepObject` |
+| `header` | `simple` |
+| `cookie` | `form` |
+
+`<explode>` is `true` or `false`. For example, to emit a CSV-style query array
+(`?ids=a,b,c`) instead of the default `?ids=a&ids=b&ids=c`:
+
+```go
+// @Param ids query []string false "Filter by ids" form false
+```
 
 ```go
 // @Summary Create a user
