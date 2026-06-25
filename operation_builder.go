@@ -13,7 +13,7 @@ import (
 )
 
 // buildOperation turns a Chi route into an OpenAPI operation.
-func (g *Generator) buildOperation(ri RouteInfo) Operation {
+func (g *Generator) buildOperation(ri RouteInfo) (Operation, error) {
 	route, method := ri.Pattern, ri.Method
 	slog.Debug("[openapi] buildOperation: called", "route", route, "method", method)
 
@@ -69,12 +69,9 @@ func (g *Generator) buildOperation(ri RouteInfo) Operation {
 			}
 			style, err := resolveParameterStyle(param)
 			if err != nil {
-				slog.Warn(
-					"[openapi] buildOperation: invalid @Param style",
-					"name", param.Name,
-					"in", param.In,
-					"operationId", op.OperationID,
-					"error", err,
+				return Operation{}, fmt.Errorf(
+					"invalid @Param style for %q (in=%q) on operation %q: %w",
+					param.Name, param.In, op.OperationID, err,
 				)
 			}
 			op.Parameters = upsertParameter(op.Parameters, Parameter{
@@ -101,7 +98,7 @@ func (g *Generator) buildOperation(ri RouteInfo) Operation {
 	}
 
 	slog.Debug("[openapi] buildOperation: completed", "operationId", op.OperationID)
-	return op
+	return op, nil
 }
 
 // buildResponses assembles HTTP responses using annotations as hints.

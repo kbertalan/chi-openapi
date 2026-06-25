@@ -286,34 +286,20 @@ func TestGenerateSpec_ParameterStyleExplode(t *testing.T) {
 }
 
 // listBadStyle uses a style that is invalid for in=query (matrix is path-only).
-// The generator should drop style rather than emit an invalid
-// document, and log a warning.
+// The generator should reject the spec with an error.
 //
 // @Summary List bad
 // @Param ids query []string false "Bad style" matrix
 func listBadStyle(w http.ResponseWriter, r *http.Request) {}
 
-func TestGenerateSpec_ParameterStyleValidationDrops(t *testing.T) {
+func TestGenerateSpec_ParameterStyleValidationErrors(t *testing.T) {
 	r := chi.NewRouter()
 	r.Get("/bad", listBadStyle)
 
 	cfg := openapi.Config{Info: openapi.Info{Title: "Test", Version: "1.0.0"}}
 	g := openapi.NewGenerator()
-	spec, err := g.GenerateSpec(r, cfg)
-	if err != nil {
-		t.Fatalf("GenerateSpec error: %v", err)
-	}
-
-	op := spec.Paths["/bad"].Get
-	var got openapi.Parameter
-	for _, p := range op.Parameters {
-		if p.Name == "ids" {
-			got = p
-			break
-		}
-	}
-	if got.Style != "" {
-		t.Errorf("expected style to be dropped, got %q", got.Style)
+	if _, err := g.GenerateSpec(r, cfg); err == nil {
+		t.Fatal("expected GenerateSpec to error on invalid @Param style, got nil")
 	}
 }
 

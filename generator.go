@@ -1,6 +1,7 @@
 package openapi
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"maps"
@@ -162,12 +163,17 @@ func (g *Generator) GenerateSpec(router chi.Router, cfg Config) (Spec, error) {
 		registeredPaths[convertRouteToOpenAPIPath(ri.Pattern)] = true
 	}
 
+	var opErrs []error
 	for _, ri := range routes {
 		method := ri.Method
 		route := ri.Pattern
 		pathKey := stripTrailingSlashIfSafe(convertRouteToOpenAPIPath(route), registeredPaths)
 
-		operation := g.buildOperation(ri)
+		operation, err := g.buildOperation(ri)
+		if err != nil {
+			opErrs = append(opErrs, err)
+			continue
+		}
 		operation.OperationID = dedupeOperationID(operation.OperationID, usedOperationIDs)
 
 		pathItem := spec.Paths[pathKey]
@@ -199,6 +205,10 @@ func (g *Generator) GenerateSpec(router chi.Router, cfg Config) (Spec, error) {
 				referencedSchemes[name] = true
 			}
 		}
+	}
+
+	if len(opErrs) > 0 {
+		return spec, fmt.Errorf("[openapi] GenerateSpec: %w", errors.Join(opErrs...))
 	}
 
 	// Custom tag handlers run during schema generation above; surface any error.

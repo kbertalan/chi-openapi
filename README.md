@@ -82,6 +82,8 @@ OpenAPI defaults for the parameter's `in`. The allowed `<style>` values per `in`
 | `header` | `simple` |
 | `cookie` | `form` |
 
+Using a `<style>` that isn't allowed for the parameter's `<in>` causes `GenerateSpec` to return an error listing every invalid `@Param` it found.
+
 `<explode>` is `true` or `false`. For example, to emit a CSV-style query array
 (`?ids=a,b,c`) instead of the default `?ids=a&ids=b&ids=c`:
 
