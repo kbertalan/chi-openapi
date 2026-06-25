@@ -8,6 +8,17 @@ import (
 	"strconv"
 )
 
+// assignScalar is setScalar with allocation for kindPtrScalar fields.
+func assignScalar(fv reflect.Value, fd *fieldDescriptor, raw, token string) error {
+	if fd.kind == kindPtrScalar {
+		if fv.IsNil() {
+			fv.Set(reflect.New(fd.elemType))
+		}
+		return setScalar(fv.Elem(), fd.elemKind, raw, token)
+	}
+	return setScalar(fv, fd.kind, raw, token)
+}
+
 // setScalar parses raw into the (addressable) field value fv according to kind.
 // token is the directive name used in error messages.
 func setScalar(fv reflect.Value, kind fieldKind, raw, token string) error {
@@ -101,7 +112,7 @@ func bindPositional(dst reflect.Value, info *structInfo, args []string, token st
 			}
 			continue
 		}
-		if err := setScalar(dst.Field(fd.index), fd.kind, arg, fd.token); err != nil {
+		if err := assignScalar(dst.Field(fd.index), fd, arg, fd.token); err != nil {
 			return err
 		}
 	}

@@ -192,7 +192,7 @@ func applyDirective(lines []string, i, ind int, rest string, fd *fieldDescriptor
 				pe.add(fmt.Sprintf("field %q: %v", "@"+fd.token, err))
 				return last + 1
 			}
-			if err := setScalar(target, fd.kind, val, fd.token); err != nil {
+			if err := assignScalar(target, fd, val, fd.token); err != nil {
 				pe.add(err.Error())
 			}
 			return last + 1
@@ -202,7 +202,7 @@ func applyDirective(lines []string, i, ind int, rest string, fd *fieldDescriptor
 			pe.add(fmt.Sprintf("field %q: %v", "@"+fd.token, err))
 			return i + 1
 		}
-		if err := setScalar(target, fd.kind, val, fd.token); err != nil {
+		if err := assignScalar(target, fd, val, fd.token); err != nil {
 			pe.add(err.Error())
 		}
 		return i + 1
@@ -354,14 +354,14 @@ func bindInline(fd *fieldDescriptor, rest string, target reflect.Value) error {
 		}
 		return nil
 	default:
-		if !isScalarKind(fd.kind) {
+		if !isScalarKind(fd.kind) && fd.kind != kindPtrScalar {
 			return fmt.Errorf("field %q: cannot use this type inline (as a map key)", "@"+fd.token)
 		}
 		val, err := parseScalarLine(rest)
 		if err != nil {
 			return fmt.Errorf("field %q: %v", "@"+fd.token, err)
 		}
-		return setScalar(target, fd.kind, val, fd.token)
+		return assignScalar(target, fd, val, fd.token)
 	}
 }
 

@@ -20,6 +20,7 @@ const (
 	kindBool
 	kindStruct
 	kindPtrStruct
+	kindPtrScalar
 	kindSliceScalar
 	kindSliceStruct
 	kindSliceSlice // slice of scalar slices ([][]scalar)
@@ -97,6 +98,8 @@ func newDescriptor(t reflect.Type, token string) *fieldDescriptor {
 		fd.elemInfo = infoFor(t)
 	case kindPtrStruct:
 		fd.elemInfo = infoFor(fd.elemType)
+	case kindPtrScalar:
+		fd.elemKind, _ = classify(fd.elemType)
 	case kindSliceStruct:
 		st := fd.elemType
 		if st.Kind() == reflect.Pointer {
@@ -144,8 +147,12 @@ func classify(t reflect.Type) (fieldKind, reflect.Type) {
 	case reflect.Bool:
 		return kindBool, nil
 	case reflect.Pointer:
-		if t.Elem().Kind() == reflect.Struct {
-			return kindPtrStruct, t.Elem()
+		et := t.Elem()
+		if et.Kind() == reflect.Struct {
+			return kindPtrStruct, et
+		}
+		if ek, _ := classify(et); isScalarKind(ek) {
+			return kindPtrScalar, et
 		}
 		return kindUnsupported, nil
 	case reflect.Struct:

@@ -389,6 +389,178 @@ func TestMarshalBlockFallback(t *testing.T) {
 	}
 }
 
+type withPtrScalars struct {
+	Summary string
+	Flag    *bool   `tag:"Flag"`
+	Count   *int    `tag:"Count"`
+	Note    *string `tag:"Note"`
+	Ratio   *float64 `tag:"Ratio"`
+}
+
+func TestPtrScalarUnmarshalAndOmit(t *testing.T) {
+	var got withPtrScalars
+	if err := Unmarshal("@Summary s\n@Flag false\n@Count 3\n@Note hello", &got); err != nil {
+		t.Fatalf("Unmarshal error: %v", err)
+	}
+	if got.Flag == nil || *got.Flag != false {
+		t.Errorf("expected Flag=*false, got %v", got.Flag)
+	}
+	if got.Count == nil || *got.Count != 3 {
+		t.Errorf("expected Count=*3, got %v", got.Count)
+	}
+	if got.Note == nil || *got.Note != "hello" {
+		t.Errorf("expected Note=*\"hello\", got %v", got.Note)
+	}
+	if got.Ratio != nil {
+		t.Errorf("expected Ratio nil (unset), got %v", got.Ratio)
+	}
+}
+
+func TestPtrScalarRoundTrip(t *testing.T) {
+	flag := true
+	count := -7
+	note := "n"
+	ratio := 1.5
+	in := withPtrScalars{Summary: "s", Flag: &flag, Count: &count, Note: &note, Ratio: &ratio}
+
+	out, err := Marshal(in)
+	if err != nil {
+		t.Fatalf("Marshal error: %v", err)
+	}
+	var got withPtrScalars
+	if err := Unmarshal(out, &got); err != nil {
+		t.Fatalf("Unmarshal error: %v\n%s", err, out)
+	}
+	if !reflect.DeepEqual(got, in) {
+		t.Errorf("round trip mismatch\n%s\ngot %+v\nwant %+v", out, got, in)
+	}
+}
+
+func TestPtrScalarMarshalNilOmits(t *testing.T) {
+	in := withPtrScalars{Summary: "only"}
+	out, err := Marshal(in)
+	if err != nil {
+		t.Fatalf("Marshal error: %v", err)
+	}
+	if strings.Contains(out, "@Flag") || strings.Contains(out, "@Count") ||
+		strings.Contains(out, "@Note") || strings.Contains(out, "@Ratio") {
+		t.Errorf("nil pointer fields should be omitted, got:\n%s", out)
+	}
+}
+
+func TestPtrBool(t *testing.T) {
+	type s struct{ V *bool }
+	cases := []struct {
+		in   string
+		want bool
+	}{
+		{"@V true", true},
+		{"@V false", false},
+	}
+	for _, c := range cases {
+		var got s
+		if err := Unmarshal(c.in, &got); err != nil {
+			t.Fatalf("%q: %v", c.in, err)
+		}
+		if got.V == nil || *got.V != c.want {
+			t.Errorf("%q: expected *%v, got %v", c.in, c.want, got.V)
+		}
+	}
+
+	var bad s
+	if err := Unmarshal("@V yes", &bad); err == nil {
+		t.Error("expected error for non-bool value")
+	}
+
+	var unset s
+	if err := Unmarshal("", &unset); err != nil {
+		t.Fatalf("empty doc: %v", err)
+	}
+	if unset.V != nil {
+		t.Errorf("expected nil when directive absent, got %v", unset.V)
+	}
+}
+
+func TestPtrInt(t *testing.T) {
+	type s struct{ V *int }
+	cases := []struct {
+		in   string
+		want int
+	}{
+		{"@V 0", 0},
+		{"@V 42", 42},
+		{"@V -7", -7},
+	}
+	for _, c := range cases {
+		var got s
+		if err := Unmarshal(c.in, &got); err != nil {
+			t.Fatalf("%q: %v", c.in, err)
+		}
+		if got.V == nil || *got.V != c.want {
+			t.Errorf("%q: expected *%d, got %v", c.in, c.want, got.V)
+		}
+	}
+
+	var bad s
+	if err := Unmarshal("@V 1.5", &bad); err == nil {
+		t.Error("expected error for non-integer value")
+	}
+
+	var unset s
+	if err := Unmarshal("", &unset); err != nil {
+		t.Fatalf("empty doc: %v", err)
+	}
+	if unset.V != nil {
+		t.Errorf("expected nil when directive absent, got %v", unset.V)
+	}
+}
+
+func TestPtrFloat64(t *testing.T) {
+	type s struct{ V *float64 }
+	cases := []struct {
+		in   string
+		want float64
+	}{
+		{"@V 0", 0},
+		{"@V 1.5", 1.5},
+		{"@V -3.25", -3.25},
+		{"@V 1e3", 1000},
+	}
+	for _, c := range cases {
+		var got s
+		if err := Unmarshal(c.in, &got); err != nil {
+			t.Fatalf("%q: %v", c.in, err)
+		}
+		if got.V == nil || *got.V != c.want {
+			t.Errorf("%q: expected *%v, got %v", c.in, c.want, got.V)
+		}
+	}
+
+	var bad s
+	if err := Unmarshal("@V abc", &bad); err == nil {
+		t.Error("expected error for non-numeric value")
+	}
+
+	var unset s
+	if err := Unmarshal("", &unset); err != nil {
+		t.Fatalf("empty doc: %v", err)
+	}
+	if unset.V != nil {
+		t.Errorf("expected nil when directive absent, got %v", unset.V)
+	}
+}
+
+func TestPtrScalarDuplicateDirectiveErrors(t *testing.T) {
+	var got withPtrScalars
+	err := Unmarshal("@Flag true\n@Flag false", &got)
+	if err == nil {
+		t.Fatal("expected duplicate-directive error, got nil")
+	}
+	if !strings.Contains(err.Error(), "duplicate directive") {
+		t.Errorf("expected duplicate-directive error, got: %v", err)
+	}
+}
+
 func TestCacheIsolation(t *testing.T) {
 	var a, b doc
 	if err := Unmarshal("@Summary first", &a); err != nil {

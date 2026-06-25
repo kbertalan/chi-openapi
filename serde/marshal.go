@@ -63,6 +63,17 @@ func marshalField(b *strings.Builder, fd *fieldDescriptor, fv reflect.Value, ind
 		return marshalStructDirective(b, fd, fv, indent)
 	case kindPtrStruct:
 		return marshalStructDirective(b, fd, fv.Elem(), indent)
+	case kindPtrScalar:
+		s, err := renderScalar(fv.Elem(), fd.elemKind)
+		if err != nil {
+			return err
+		}
+		if strings.Contains(s, "\n") && !strings.Contains(s, "`") {
+			writeBacktick(b, pad, fd.token, s)
+			return nil
+		}
+		fmt.Fprintf(b, "%s@%s %s\n", pad, fd.token, quoteIfNeeded(s))
+		return nil
 	case kindSliceStruct:
 		if fv.Len() == 0 {
 			fmt.Fprintf(b, "%s@%s []\n", pad, fd.token)
@@ -217,7 +228,7 @@ func renderValueInline(fd *fieldDescriptor, v reflect.Value) (string, bool, erro
 		parts := make([]string, 0, last+1)
 		for k := 0; k <= last; k++ {
 			cfd := fd.elemInfo.order[k]
-			s, err := renderScalar(sv.Field(cfd.index), cfd.kind)
+			s, err := renderScalarField(sv.Field(cfd.index), cfd)
 			if err != nil {
 				return "", false, err
 			}
@@ -227,6 +238,12 @@ func renderValueInline(fd *fieldDescriptor, v reflect.Value) (string, bool, erro
 	case kindSliceScalar:
 		s, err := renderScalarSlice(v, fd.elemKind)
 		return s, true, err
+	case kindPtrScalar:
+		if v.IsNil() {
+			return "", true, nil
+		}
+		s, err := renderScalar(v.Elem(), fd.elemKind)
+		return quoteIfNeeded(s), true, err
 	default:
 		if !isScalarKind(fd.kind) {
 			return "", false, fmt.Errorf("serde: unsupported map key/value kind for %q", "@"+fd.token)
@@ -250,7 +267,7 @@ func marshalStructDirective(b *strings.Builder, fd *fieldDescriptor, sv reflect.
 		parts := make([]string, 0, last+1)
 		for k := 0; k <= last; k++ {
 			cfd := fd.elemInfo.order[k]
-			s, err := renderScalar(sv.Field(cfd.index), cfd.kind)
+			s, err := renderScalarField(sv.Field(cfd.index), cfd)
 			if err != nil {
 				return err
 			}
@@ -277,14 +294,27 @@ func canCompact(info *structInfo, sv reflect.Value) (bool, int) {
 	for k := 0; k <= last; k++ {
 		fd := info.order[k]
 		fv := sv.Field(fd.index)
-		if !isScalarKind(fd.kind) || isEmptyValue(fv) {
+		scalar := isScalarKind(fd.kind) || fd.kind == kindPtrScalar
+		if !scalar || isEmptyValue(fv) {
 			return false, last
 		}
 		if fd.kind == kindString && strings.Contains(fv.String(), "\n") {
 			return false, last
 		}
+		if fd.kind == kindPtrScalar && fd.elemKind == kindString && strings.Contains(fv.Elem().String(), "\n") {
+			return false, last
+		}
 	}
 	return true, last
+}
+
+// renderScalarField is renderScalar that also handles kindPtrScalar (caller
+// must ensure non-nil).
+func renderScalarField(fv reflect.Value, fd *fieldDescriptor) (string, error) {
+	if fd.kind == kindPtrScalar {
+		return renderScalar(fv.Elem(), fd.elemKind)
+	}
+	return renderScalar(fv, fd.kind)
 }
 
 func renderScalar(fv reflect.Value, kind fieldKind) (string, error) {
