@@ -47,11 +47,11 @@ func coerceTagValue(schema *Schema, value string) any {
 // openapiTagKeys are the recognized `openapi` tag keys, used to find segment
 // boundaries so a comma inside a value (e.g. ^a{2,5}$) isn't a separator.
 var openapiTagKeys = map[string]bool{
-	"format": true, "pattern": true, "example": true, "title": true,
+	"format": true, "pattern": true, "example": true, "examples": true, "title": true,
 	"description": true, "deprecated": true, "readOnly": true, "writeOnly": true,
 	"minimum": true, "maximum": true, "exclusiveMinimum": true, "exclusiveMin": true,
 	"exclusiveMaximum": true, "exclusiveMax": true, "minLength": true, "maxLength": true,
-	"minItems": true, "maxItems": true, "uniqueItems": true, "enum": true, "default": true,
+	"minItems": true, "maxItems": true, "uniqueItems": true, "enum": true, "enums": true, "default": true,
 }
 
 // splitOpenAPITagParts splits a comma-separated `openapi` tag into key=value
@@ -147,6 +147,10 @@ func applyOpenAPITag(schema *Schema, tag reflect.StructTag) error {
 			schema.Pattern = value
 		case "example":
 			schema.Examples = append(schema.Examples, coerceTagValue(schema, value))
+		case "examples":
+			for _, v := range strings.Split(value, ",") {
+				schema.Examples = append(schema.Examples, coerceTagValue(schema, strings.TrimSpace(v)))
+			}
 		case "title":
 			schema.Title = value
 		case "description":
@@ -188,10 +192,10 @@ func applyOpenAPITag(schema *Schema, tag reflect.StructTag) error {
 				schema.UniqueItems = &ui
 			}
 		case "enum":
-			vals := strings.Split(value, "|")
-			schema.Enum = make([]any, len(vals))
-			for i, v := range vals {
-				schema.Enum[i] = strings.TrimSpace(v)
+			schema.Enum = append(schema.Enum, value)
+		case "enums":
+			for _, v := range strings.Split(value, ",") {
+				schema.Enum = append(schema.Enum, strings.TrimSpace(v))
 			}
 		case "default":
 			schema.Default = coerceTagValue(schema, value)

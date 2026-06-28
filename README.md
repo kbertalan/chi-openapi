@@ -109,12 +109,19 @@ Field tags in the `openapi` dialect become JSON-schema constraints.
 | --- | --- | --- | --- |
 | `format` | `format=email` | `pattern` | `pattern=^[A-Z]{3}$` |
 | `description` | `description=...` | `default` | `default=1` |
-| `title` | `title=...` | `example` | `example=Ada` |
+| `title` | `title=...` | `example` / `examples` | `examples=Ada,Grace` |
 | `minLength` / `maxLength` | `minLength=2` | `minimum` / `maximum` | `minimum=1` |
 | `exclusiveMinimum` / `exclusiveMaximum` | `exclusiveMinimum=0` | `minItems` / `maxItems` | `minItems=1` |
-| `uniqueItems` | `uniqueItems=true` | `enum` | `` enum=a\|b\|c `` |
+| `uniqueItems` | `uniqueItems=true` | `enum` / `enums` | `enums=a,b,c` |
 | `readOnly` | `readOnly=true` | `writeOnly` | `writeOnly=true` |
 | `deprecated` | `deprecated=true` | | |
+
+`enum`/`example` and their plural forms `enums`/`examples` all append on
+repetition. The plural forms split their value on commas, contributing one
+element each (`examples=a,b` → two examples). The singular forms take the whole
+value as a single element, so use them for values that contain a comma
+(`example=Lovelace, Ada` → one example). Mix them freely:
+`enum=x,y,enums=a,b` yields `["x,y", "a", "b"]`.
 
 ```go
 type User struct {

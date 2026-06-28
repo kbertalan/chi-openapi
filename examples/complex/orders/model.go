@@ -22,7 +22,7 @@ const (
 // OrderItem is a single line in an order. The openapi tag adds a pattern and
 // numeric bounds to the generated schema.
 type OrderItem struct {
-	SKU      string `json:"sku" openapi:"pattern=^[A-Z]{3}-[0-9]{4}$,example=ABC-0001"`
+	SKU      string `json:"sku" openapi:"pattern=^[A-Z]{3}-[0-9]{4}$,example=ABC-0001,example=XYZ-9999"`
 	Quantity int    `json:"quantity" openapi:"minimum=1,maximum=999,default=1"`
 }
 

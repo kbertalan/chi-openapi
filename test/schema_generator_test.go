@@ -244,6 +244,24 @@ func TestSchemaGenerator_TagEnhancements(t *testing.T) {
 		t.Fatalf("expected size examples [1 2 3], got %v", size.Examples)
 	}
 
+	// examples= (plural) splits its value on commas, one example per element
+	span := schema.Properties["span"]
+	if len(span.Examples) != 3 || span.Examples[0] != int64(4) || span.Examples[1] != int64(5) || span.Examples[2] != int64(6) {
+		t.Fatalf("expected span examples [4 5 6], got %v", span.Examples)
+	}
+
+	// example= (singular) keeps a comma-containing value as a single example
+	note := schema.Properties["note"]
+	if len(note.Examples) != 1 || note.Examples[0] != "Lovelace, Ada" {
+		t.Fatalf("expected note examples [Lovelace, Ada], got %v", note.Examples)
+	}
+
+	// enums= splits on commas; enum= keeps its comma value whole; both append
+	kind := schema.Properties["kind"]
+	if len(kind.Enum) != 3 || kind.Enum[0] != "a" || kind.Enum[1] != "b" || kind.Enum[2] != "c,d" {
+		t.Fatalf("expected kind enum [a b c,d], got %v", kind.Enum)
+	}
+
 	rate := schema.Properties["rate"]
 	AssertEqual[any](t, 1.5, rate.Default)
 
