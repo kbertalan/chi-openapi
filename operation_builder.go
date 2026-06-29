@@ -74,6 +74,13 @@ func (g *Generator) buildOperation(ri RouteInfo) (Operation, error) {
 					param.Name, param.In, op.OperationID, err,
 				)
 			}
+			schema := g.schemaGen.GenerateSchema(param.Type)
+			if err := applyParamSchema(schema, param.Schema); err != nil {
+				return Operation{}, fmt.Errorf(
+					"invalid @Schema for %q (in=%q) on operation %q: %w",
+					param.Name, param.In, op.OperationID, err,
+				)
+			}
 			op.Parameters = upsertParameter(op.Parameters, Parameter{
 				Name:        param.Name,
 				In:          param.In,
@@ -81,7 +88,7 @@ func (g *Generator) buildOperation(ri RouteInfo) (Operation, error) {
 				Required:    param.Required,
 				Style:       style,
 				Explode:     param.Explode,
-				Schema:      g.schemaGen.GenerateSchema(param.Type),
+				Schema:      schema,
 			})
 		}
 
@@ -94,7 +101,11 @@ func (g *Generator) buildOperation(ri RouteInfo) (Operation, error) {
 	}
 
 	if method == http.MethodPost || method == http.MethodPut || method == http.MethodPatch {
-		op.RequestBody = g.buildRequestBody(annotations)
+		requestBody, err := g.buildRequestBody(annotations)
+		if err != nil {
+			return Operation{}, err
+		}
+		op.RequestBody = requestBody
 	}
 
 	slog.Debug("[openapi] buildOperation: completed", "operationId", op.OperationID)
@@ -154,7 +165,7 @@ func contentMap(contentTypes []string, defaultType string, schema *Schema) map[s
 }
 
 // buildRequestBody constructs a request body definition.
-func (g *Generator) buildRequestBody(annotations *Annotation) *RequestBody {
+func (g *Generator) buildRequestBody(annotations *Annotation) (*RequestBody, error) {
 	slog.Debug("[openapi] buildRequestBody: called")
 
 	var (
@@ -180,6 +191,9 @@ func (g *Generator) buildRequestBody(annotations *Annotation) *RequestBody {
 			}
 
 			schema = g.schemaGen.GenerateSchema(dataType)
+			if err := applyParamSchema(schema, param.Schema); err != nil {
+				return nil, fmt.Errorf("invalid @Schema for body parameter %q: %w", param.Name, err)
+			}
 			if param.Description != "" {
 				description = param.Description
 			}
@@ -202,7 +216,7 @@ func (g *Generator) buildRequestBody(annotations *Annotation) *RequestBody {
 		Description: description,
 		Required:    required,
 		Content:     contentMap(accept, "application/json", schema),
-	}
+	}, nil
 }
 
 // buildTags produces tag entries sorted for determinism, preferring
@@ -340,6 +354,143 @@ var parameterStyleAllowedIn = map[ParameterStyle][]string{
 	ParameterStyleSpaceDelimited: {"query"},
 	ParameterStylePipeDelimited:  {"query"},
 	ParameterStyleDeepObject:     {"query"},
+}
+
+// Constraint applicability per the OpenAPI / JSON Schema conventions.
+var (
+	stringConstraintTypes = []string{"string"}
+	numberConstraintTypes = []string{"integer", "number"}
+	arrayConstraintTypes  = []string{"array"}
+	formatConstraintTypes = []string{"string", "integer", "number"}
+)
+
+// applyParamSchema copies the constraints from a parsed @Schema block onto the
+// generated schema, validating that each constraint applies to the schema's
+// type (e.g. minItems only on arrays). It returns an error on a type mismatch.
+func applyParamSchema(schema *Schema, ps ParamSchema) error {
+	target, typ := resolveConstraintTarget(schema)
+	if target == nil {
+		return nil
+	}
+
+	// check rejects a constraint whose type is known and not in allowed. An
+	// unknown type (e.g. a $ref'd object) skips validation rather than erroring.
+	check := func(name string, allowed []string) error {
+		if typ != "" && !slices.Contains(allowed, typ) {
+			return fmt.Errorf("@Schema %s is not allowed for type %q (allowed: %s)", name, typ, strings.Join(allowed, ", "))
+		}
+		return nil
+	}
+
+	if ps.Format != "" {
+		if err := check("Format", formatConstraintTypes); err != nil {
+			return err
+		}
+		target.Format = ps.Format
+	}
+	if ps.Pattern != "" {
+		if err := check("Pattern", stringConstraintTypes); err != nil {
+			return err
+		}
+		target.Pattern = ps.Pattern
+	}
+	if ps.MinLength != nil {
+		if err := check("MinLength", stringConstraintTypes); err != nil {
+			return err
+		}
+		target.MinLength = ps.MinLength
+	}
+	if ps.MaxLength != nil {
+		if err := check("MaxLength", stringConstraintTypes); err != nil {
+			return err
+		}
+		target.MaxLength = ps.MaxLength
+	}
+	if ps.Minimum != nil {
+		if err := check("Minimum", numberConstraintTypes); err != nil {
+			return err
+		}
+		target.Minimum = ps.Minimum
+	}
+	if ps.Maximum != nil {
+		if err := check("Maximum", numberConstraintTypes); err != nil {
+			return err
+		}
+		target.Maximum = ps.Maximum
+	}
+	if ps.ExclusiveMinimum != nil {
+		if err := check("ExclusiveMinimum", numberConstraintTypes); err != nil {
+			return err
+		}
+		target.ExclusiveMinimum = ps.ExclusiveMinimum
+	}
+	if ps.ExclusiveMaximum != nil {
+		if err := check("ExclusiveMaximum", numberConstraintTypes); err != nil {
+			return err
+		}
+		target.ExclusiveMaximum = ps.ExclusiveMaximum
+	}
+	if ps.MinItems != nil {
+		if err := check("MinItems", arrayConstraintTypes); err != nil {
+			return err
+		}
+		target.MinItems = ps.MinItems
+	}
+	if ps.MaxItems != nil {
+		if err := check("MaxItems", arrayConstraintTypes); err != nil {
+			return err
+		}
+		target.MaxItems = ps.MaxItems
+	}
+	if ps.UniqueItems != nil {
+		if err := check("UniqueItems", arrayConstraintTypes); err != nil {
+			return err
+		}
+		target.UniqueItems = ps.UniqueItems
+	}
+	return nil
+}
+
+// resolveConstraintTarget returns the schema constraints should be written to,
+// together with its effective primitive type. It unwraps the OpenAPI 3.1
+// nullable forms produced for pointer types: a `["array","null"]` type stays on
+// the same schema, while an anyOf:[T,null] wrapper resolves to the non-null
+// branch T. The type is "" when it cannot be determined (e.g. a $ref).
+func resolveConstraintTarget(schema *Schema) (*Schema, string) {
+	if schema == nil {
+		return nil, ""
+	}
+	if len(schema.AnyOf) > 0 {
+		for _, branch := range schema.AnyOf {
+			if t := schemaPrimaryType(branch); t != "" && t != "null" {
+				return branch, t
+			}
+		}
+		return schema, ""
+	}
+	return schema, schemaPrimaryType(schema)
+}
+
+// schemaPrimaryType extracts the non-null primary type from Schema.Type, which
+// may be a string or a list (e.g. ["integer","null"]).
+func schemaPrimaryType(schema *Schema) string {
+	switch t := schema.Type.(type) {
+	case string:
+		return t
+	case []string:
+		for _, v := range t {
+			if v != "null" {
+				return v
+			}
+		}
+	case []any:
+		for _, v := range t {
+			if s, ok := v.(string); ok && s != "null" {
+				return s
+			}
+		}
+	}
+	return ""
 }
 
 // resolveParameterStyle validates the (style, in) pair from a @Param annotation.

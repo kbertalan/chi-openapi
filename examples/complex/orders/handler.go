@@ -37,14 +37,18 @@ func (h *Handler) Register(r chi.Router) {
 
 // List returns a page of orders, optionally filtered by status and ids.
 //
-// @Summary List orders
-// @Description Return a page of orders.
-// @Tags orders
-// @Param status query string false "Filter by status"
-// @Param ids query []string false "Filter by ids (CSV)" form false
-// @Success 200 PaginatedResponse[orders.Order] "page of matching orders"
-// @Failure 500 ErrorResponse "internal error"
-// @See https://example.com/docs/orders "Orders guide"
+//	@Summary List orders
+//	@Description Return a page of orders.
+//	@Tags orders
+//	@Param status query string false "Filter by status"
+//	@Param ids query []string false "Filter by ids (CSV)" form false
+//		@Schema
+//			@MinItems 1
+//			@MaxItems 50
+//			@UniqueItems true
+//	@Success 200 PaginatedResponse[orders.Order] "page of matching orders"
+//	@Failure 500 ErrorResponse "internal error"
+//	@See https://example.com/docs/orders "Orders guide"
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	want := OrderStatus(r.URL.Query().Get("status"))
 	wantIDs := map[string]bool{}

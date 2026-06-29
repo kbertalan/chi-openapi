@@ -55,6 +55,21 @@ type ParamAnnotation struct {
 	Description string
 	Style       ParameterStyle
 	Explode     *bool
+	Schema      ParamSchema
+}
+
+type ParamSchema struct {
+	Format           string
+	Pattern          string
+	Minimum          *float64
+	Maximum          *float64
+	ExclusiveMinimum *float64
+	ExclusiveMaximum *float64
+	MinLength        *int
+	MaxLength        *int
+	MinItems         *int
+	MaxItems         *int
+	UniqueItems      *bool
 }
 
 type ErrorResponse struct {

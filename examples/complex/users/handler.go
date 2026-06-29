@@ -40,12 +40,15 @@ func (h *Handler) Register(r chi.Router) {
 
 // List returns a page of users.
 //
-// @Summary List users
-// @Description Return a page of users, optionally capped by a limit.
-// @Tags users
-// @Param limit query int false "Maximum number of users to return"
-// @Success 200 PaginatedResponse[users.User] "page of users"
-// @Failure 500 ErrorResponse "internal error"
+//	@Summary List users
+//	@Description Return a page of users, optionally capped by a limit.
+//	@Tags users
+//	@Param limit query int false "Maximum number of users to return"
+//		@Schema
+//			@Minimum 1
+//			@Maximum 100
+//	@Success 200 PaginatedResponse[users.User] "page of users"
+//	@Failure 500 ErrorResponse "internal error"
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	limit := -1
 	if v := r.URL.Query().Get("limit"); v != "" {

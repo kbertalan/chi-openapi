@@ -78,6 +78,22 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "ids",
+            "in": "query",
+            "description": "Filter by ids (CSV)",
+            "style": "form",
+            "explode": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1,
+              "maxItems": 50,
+              "uniqueItems": true
+            }
           }
         ],
         "responses": {
@@ -390,7 +406,9 @@
             "description": "Maximum number of users to return",
             "schema": {
               "type": "integer",
-              "format": "int64"
+              "format": "int64",
+              "minimum": 1,
+              "maximum": 100
             }
           }
         ],
@@ -752,7 +770,8 @@
             "type": "string",
             "pattern": "^[A-Z]{3}-[0-9]{4}$",
             "examples": [
-              "ABC-0001"
+              "ABC-0001",
+              "XYZ-9999"
             ]
           }
         },

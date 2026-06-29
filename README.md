@@ -65,6 +65,7 @@ Directives live in the handler's doc comment.
 | `@Tags` | `@Tags <a> <b>` | Group operations |
 | `@Accept` | `@Accept <mime>` | Request content type |
 | `@Param` | `@Param <name> <in> <type> <required> "<desc>" [<style> <explode>]` | Path/query/header/body parameter |
+| `@Schema` | indented block under `@Param` | Schema constraints (min/max, pattern, …) |
 | `@Success` | `@Success <code> <Type> "<desc>"` | Success response + body type |
 | `@Failure` | `@Failure <code> <Type> "<desc>"` | Error response + body type |
 | `@Security` | `@Security <scheme>` | Require a security scheme |
@@ -89,6 +90,27 @@ Using a `<style>` that isn't allowed for the parameter's `<in>` causes `Generate
 
 ```go
 // @Param ids query []string false "Filter by ids" form false
+```
+
+### Schema constraints
+
+An indented `@Schema` block under a `@Param` adds JSON Schema constraints to that
+parameter's (or body's) schema. Each constraint is only valid for certain types;
+applying one to the wrong type causes `GenerateSpec` to return an error.
+
+| Constraint | Allowed types |
+| --- | --- |
+| `@Pattern`, `@MinLength`, `@MaxLength` | `string` |
+| `@Minimum`, `@Maximum`, `@ExclusiveMinimum`, `@ExclusiveMaximum` | `integer`, `number` |
+| `@MinItems`, `@MaxItems`, `@UniqueItems` | array |
+| `@Format` | `string`, `integer`, `number` |
+
+```go
+// @Param tags body []string true "tags to create"
+//   @Schema
+//     @MinItems 1
+//     @MaxItems 5
+//     @UniqueItems true
 ```
 
 ```go
