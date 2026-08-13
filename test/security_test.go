@@ -55,6 +55,25 @@ func TestSecuritySchemeConstructors(t *testing.T) {
 			}),
 			want: `{"type":"oauth2","flows":{"clientCredentials":{"tokenUrl":"https://a.example/token","scopes":{}}}}`,
 		},
+		{
+			name: "oauth2 clientCredentials with extensions",
+			scheme: security.OAuth2(openapi.OAuthFlows{
+				ClientCredentials: security.ClientCredentialsFlow("https://login.example.com/oauth/token", nil,
+					security.WithFlowExtension("x-credentials-location", "body"),
+					security.WithFlowExtension("x-security-body", map[string]string{
+						"audience": "https://api.example.com/",
+					})),
+			}),
+			want: `{"type":"oauth2","flows":{"clientCredentials":{"tokenUrl":"https://login.example.com/oauth/token","scopes":{},"x-credentials-location":"body","x-security-body":{"audience":"https://api.example.com/"}}}}`,
+		},
+		{
+			name: "oauth2 clientCredentials without extensions is unchanged",
+			scheme: security.OAuth2(openapi.OAuthFlows{
+				ClientCredentials: security.ClientCredentialsFlow("https://a.example/token",
+					map[string]string{"read": "Read access"}),
+			}),
+			want: `{"type":"oauth2","flows":{"clientCredentials":{"tokenUrl":"https://a.example/token","scopes":{"read":"Read access"}}}}`,
+		},
 	}
 
 	for _, tc := range cases {
@@ -67,5 +86,16 @@ func TestSecuritySchemeConstructors(t *testing.T) {
 				t.Errorf("got  %s\nwant %s", got, tc.want)
 			}
 		})
+	}
+}
+
+func TestOAuthFlowExtensionNameMustBePrefixed(t *testing.T) {
+	scheme := security.OAuth2(openapi.OAuthFlows{
+		ClientCredentials: security.ClientCredentialsFlow("https://a.example/token", nil,
+			security.WithFlowExtension("credentials-location", "body")),
+	})
+
+	if _, err := json.Marshal(scheme); err == nil {
+		t.Fatal("expected an error for an extension name without the \"x-\" prefix")
 	}
 }

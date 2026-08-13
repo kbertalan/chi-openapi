@@ -1,5 +1,14 @@
 package openapi
 
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"maps"
+	"slices"
+	"strings"
+)
+
 // Config defines the configuration for OpenAPI specification generation.
 // Info.Title and Info.Version are required; all other fields are optional.
 type Config struct {
@@ -281,12 +290,53 @@ type OAuthFlows struct {
 }
 
 // OAuthFlow configures a single OAuth2 flow. Scopes is required, so it is
-// serialized even when empty.
+// serialized even when empty. Extensions holds specification extensions, which
+// are emitted after the standard fields.
 type OAuthFlow struct {
 	AuthorizationURL string            `json:"authorizationUrl,omitempty"`
 	TokenURL         string            `json:"tokenUrl,omitempty"`
 	RefreshURL       string            `json:"refreshUrl,omitempty"`
 	Scopes           map[string]string `json:"scopes"`
+	Extensions       map[string]any    `json:"-"`
+}
+
+// MarshalJSON appends Extensions, sorted by name, to the flow object. Extension
+// names must be prefixed with "x-" as required by the OpenAPI schema.
+func (f OAuthFlow) MarshalJSON() ([]byte, error) {
+	type flow OAuthFlow
+	data, err := json.Marshal(flow(f))
+	if err != nil {
+		return nil, err
+	}
+	if len(f.Extensions) == 0 {
+		return data, nil
+	}
+
+	var buf bytes.Buffer
+	buf.Write(data[:len(data)-1])
+	comma := len(data) > len("{}")
+	for _, name := range slices.Sorted(maps.Keys(f.Extensions)) {
+		if !strings.HasPrefix(name, "x-") {
+			return nil, fmt.Errorf("oauth flow extension %q: name must be prefixed with \"x-\"", name)
+		}
+		value, err := json.Marshal(f.Extensions[name])
+		if err != nil {
+			return nil, fmt.Errorf("oauth flow extension %q: %w", name, err)
+		}
+		key, err := json.Marshal(name)
+		if err != nil {
+			return nil, fmt.Errorf("oauth flow extension %q: %w", name, err)
+		}
+		if comma {
+			buf.WriteByte(',')
+		}
+		comma = true
+		buf.Write(key)
+		buf.WriteByte(':')
+		buf.Write(value)
+	}
+	buf.WriteByte('}')
+	return buf.Bytes(), nil
 }
 
 // Tag represents an OpenAPI tag entry.

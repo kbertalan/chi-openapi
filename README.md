@@ -216,6 +216,21 @@ openapi.Config{
 
 `SecurityScheme` literals still work; the constructors (`APIKey`, `HTTP`, `Basic`, `Bearer`, `MutualTLS`, `OpenIDConnect`, `OAuth2`) just set the right fields per type.
 
+Every flow constructor (`ImplicitFlow`, `PasswordFlow`, `ClientCredentialsFlow`, `AuthorizationCodeFlow`) accepts `security.WithFlowExtension` to add specification extensions to the flow object, for example to tell an API reference UI how to request a token from an identity provider that expects the credentials and an audience in the request body:
+
+```go
+"OAuth2": security.OAuth2(openapi.OAuthFlows{
+	ClientCredentials: security.ClientCredentialsFlow(
+		"https://login.example.com/oauth/token", nil,
+		security.WithFlowExtension("x-credentials-location", "body"),
+		security.WithFlowExtension("x-security-body", map[string]string{
+			"audience": "https://api.example.com/",
+		})),
+}),
+```
+
+Extension names must be prefixed with `x-`, as the OpenAPI schema rejects any other additional property; generation fails otherwise. Values may be any JSON-serializable value.
+
 ## Tags
 
 `Config.Tags` is optional. When provided, declared descriptions replace the auto-generated default for any matching `@Tags` name; undeclared tags still work and fall back to the default.

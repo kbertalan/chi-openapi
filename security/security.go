@@ -67,6 +67,27 @@ func OAuth2(flows openapi.OAuthFlows, opts ...Option) openapi.SecurityScheme {
 	return build(openapi.SecurityScheme{Type: "oauth2", Flows: &f}, opts...)
 }
 
+// FlowOption customizes an OAuthFlow.
+type FlowOption func(*openapi.OAuthFlow)
+
+// WithFlowExtension sets a specification extension on the flow. name must be
+// prefixed with "x-"; otherwise marshalling the spec fails.
+func WithFlowExtension(name string, value any) FlowOption {
+	return func(f *openapi.OAuthFlow) {
+		if f.Extensions == nil {
+			f.Extensions = make(map[string]any)
+		}
+		f.Extensions[name] = value
+	}
+}
+
+func buildFlow(f openapi.OAuthFlow, opts ...FlowOption) *openapi.OAuthFlow {
+	for _, opt := range opts {
+		opt(&f)
+	}
+	return &f
+}
+
 func scopesOrEmpty(scopes map[string]string) map[string]string {
 	if scopes == nil {
 		return map[string]string{}
@@ -75,21 +96,21 @@ func scopesOrEmpty(scopes map[string]string) map[string]string {
 }
 
 // ImplicitFlow builds an OAuth2 implicit flow.
-func ImplicitFlow(authorizationURL string, scopes map[string]string) *openapi.OAuthFlow {
-	return &openapi.OAuthFlow{AuthorizationURL: authorizationURL, Scopes: scopesOrEmpty(scopes)}
+func ImplicitFlow(authorizationURL string, scopes map[string]string, opts ...FlowOption) *openapi.OAuthFlow {
+	return buildFlow(openapi.OAuthFlow{AuthorizationURL: authorizationURL, Scopes: scopesOrEmpty(scopes)}, opts...)
 }
 
 // PasswordFlow builds an OAuth2 password flow.
-func PasswordFlow(tokenURL string, scopes map[string]string) *openapi.OAuthFlow {
-	return &openapi.OAuthFlow{TokenURL: tokenURL, Scopes: scopesOrEmpty(scopes)}
+func PasswordFlow(tokenURL string, scopes map[string]string, opts ...FlowOption) *openapi.OAuthFlow {
+	return buildFlow(openapi.OAuthFlow{TokenURL: tokenURL, Scopes: scopesOrEmpty(scopes)}, opts...)
 }
 
 // ClientCredentialsFlow builds an OAuth2 client-credentials flow.
-func ClientCredentialsFlow(tokenURL string, scopes map[string]string) *openapi.OAuthFlow {
-	return &openapi.OAuthFlow{TokenURL: tokenURL, Scopes: scopesOrEmpty(scopes)}
+func ClientCredentialsFlow(tokenURL string, scopes map[string]string, opts ...FlowOption) *openapi.OAuthFlow {
+	return buildFlow(openapi.OAuthFlow{TokenURL: tokenURL, Scopes: scopesOrEmpty(scopes)}, opts...)
 }
 
 // AuthorizationCodeFlow builds an OAuth2 authorization-code flow.
-func AuthorizationCodeFlow(authorizationURL, tokenURL string, scopes map[string]string) *openapi.OAuthFlow {
-	return &openapi.OAuthFlow{AuthorizationURL: authorizationURL, TokenURL: tokenURL, Scopes: scopesOrEmpty(scopes)}
+func AuthorizationCodeFlow(authorizationURL, tokenURL string, scopes map[string]string, opts ...FlowOption) *openapi.OAuthFlow {
+	return buildFlow(openapi.OAuthFlow{AuthorizationURL: authorizationURL, TokenURL: tokenURL, Scopes: scopesOrEmpty(scopes)}, opts...)
 }
